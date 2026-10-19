@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+models/
+.cache/
+*.log
+.DS_Store
+NEXT_STEPS.md
+README.md
+Dockerfile
+docker-compose.yml
+.dockerignore

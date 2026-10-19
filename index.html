@@ -101,9 +101,35 @@
   <div id="tooltip"></div>
 
 <script>
-const COLS = 64;            // 64 x 48 = 3072 neuronas por capa
-const ROWS = 48;
+let COLS = 64;              // se recalcula por modelo (64 x 48 = 3072 neuronas)
+let ROWS = 48;
 const CELL = 12;
+
+// Elige las dimensiones del grid para `n` neuronas con relación ~4:3,
+// minimizando celdas vacías. 3072 -> 64x48, 1024 -> 37x28, 768 -> 32x24.
+function gridDims(n) {
+  if (!n || n < 1) return { cols: 64, rows: 48 };
+  const target = 4 / 3;
+  const ideal = Math.max(1, Math.round(Math.sqrt(n * target)));
+  let best = null;
+  for (let cols = Math.max(1, Math.round(ideal * 0.6)); cols <= Math.round(ideal * 1.6) + 1; cols++) {
+    const rows = Math.ceil(n / cols);
+    const waste = cols * rows - n;                       // celdas vacías
+    const aspectErr = Math.abs(Math.log((cols / rows) / target));
+    const score = waste / n + aspectErr * 0.5;
+    if (!best || score < best.score) best = { cols, rows, score };
+  }
+  return { cols: best.cols, rows: best.rows };
+}
+
+// Ajusta el canvas del heatmap al número real de neuronas del modelo cargado.
+function resizeHeatmap() {
+  const g = gridDims(META.neurons_per_layer);
+  COLS = g.cols;
+  ROWS = g.rows;
+  heatmap.width = COLS * CELL;
+  heatmap.height = ROWS * CELL;
+}
 
 let META = { layers: 12, neurons_per_layer: 3072, top_k: 16 };
 let selectedLayer = 0;
@@ -295,6 +321,12 @@ function connect() {
     const data = JSON.parse(event.data);
     if (data.type === 'meta') {
       META = { ...META, ...data };
+      if (data.neurons_per_layer) {
+        selectedLayer = Math.min(selectedLayer, META.layers - 1);
+        resizeHeatmap();
+        document.getElementById('heatmap-title').textContent =
+          `Heatmap · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+      }
       promptEcho.textContent = data.chat ? '' : data.prompt;
       streamEl.textContent = '';
       statusEl.textContent =

@@ -1,0 +1,15 @@
+services:
+  visualizador:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - hf-models:/models          # los modelos se descargan aquí la primera vez
+    deploy:
+      resources:
+        limits:
+          memory: 6g               # el server descarga el modelo anterior al cambiar
+    restart: unless-stopped
+
+volumes:
+  hf-models:

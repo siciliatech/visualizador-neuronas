@@ -6,7 +6,7 @@ de la MLP de cada capa con el hook estándar `blocks.{i}.mlp.hook_post` y enviá
 
 Este documento cubre tres ampliaciones independientes:
 
-1. [Dockerizar](#1-dockerizar)
+1. [Dockerizar](#1-dockerizar) — **implementado**
 2. [Migrar a TransformerLens](#2-migrar-a-transformerlens) — **implementado**
 3. [Migrar a nnsight](#3-migrar-a-nnsight)
 
@@ -15,6 +15,8 @@ Al final hay una sección de [mejoras pendientes](#4-mejoras-pendientes).
 ---
 
 ## 1. Dockerizar
+
+**Estado:** implementado en `Dockerfile`, `.dockerignore` y `docker-compose.yml`.
 
 **Por qué:** aislar Python 3.14 + torch + transformers, evitar tocar el sistema y poder mover el proyecto
 a otra máquina con un comando. El único punto delicado es el modelo: GPT-2 son ~526 MB y Qwen ~1 GB, así
@@ -32,8 +34,9 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Solo CPU. Para GPU ver la variante más abajo.
+COPY requirements.txt ./
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
- && pip install "transformer-lens>=4.2" fastapi "uvicorn[standard]" websockets
+ && pip install -r requirements.txt
 
 COPY server.py index.html ./
 
@@ -46,15 +49,23 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-> El orden importa: instalar `torch` desde el índice **CPU** reduce la imagen de ~3 GB (con CUDA) a ~1.5 GB.
-> `PIP_NO_CACHE_DIR=1` evita que la imagen engorde con las ruedas descargadas.
+> Las dependencias se fijan en `requirements.txt`. El orden importa: instalar `torch` desde el índice
+> **CPU** reduce la imagen de ~3 GB (con CUDA) a ~1.5 GB, y como `requirements.txt` fija `torch==2.14.1`,
+> pip reutiliza esa rueda CPU en lugar de bajar la de CUDA. `PIP_NO_CACHE_DIR=1` evita que la imagen
+> engorde con las ruedas descargadas.
 
 ### `.dockerignore`
 
 ```
-.venv
-__pycache__
+.venv/
+venv/
+__pycache__/
 *.pyc
+.git/
+models/
+.cache/
+*.log
+.DS_Store
 ```
 
 ### `docker-compose.yml`
@@ -94,8 +105,10 @@ Cambiar la base y la rueda de torch, y activar la GPU en compose:
 ```dockerfile
 FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
-# torch con CUDA (índice por defecto ya trae la build cu)
-RUN pip install --break-system-packages torch transformers fastapi "uvicorn[standard]" websockets
+# torch con CUDA (índice por defecto ya trae la build cu) + resto de dependencias
+COPY requirements.txt ./
+RUN pip install --break-system-packages torch \
+ && pip install --break-system-packages -r requirements.txt
 ```
 
 ```yaml
