@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Visualizador de Activación Neuronal — GPT-2</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: #0f172a; color: #e2e8f0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 12px; color: #38bdf8; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  input[type=text] {
+    flex: 1 1 420px; padding: 8px 10px; background: #020617;
+    border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit;
+  }
+  input[type=number] { width: 72px; padding: 8px; background: #020617; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit; }
+  select { padding: 8px; background: #020617; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit; }
+  label { font-size: .72rem; color: #64748b; }
+  button {
+    padding: 8px 16px; background: #0284c7; color: #f8fafc; border: 0;
+    border-radius: 6px; font: inherit; cursor: pointer;
+  }
+  button:disabled { background: #334155; cursor: default; }
+  .layout { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .panel { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 10px; }
+  .panel h2 { font-size: .8rem; margin: 0 0 8px; color: #94a3b8; font-weight: 500; }
+  canvas { display: block; }
+  #overview { cursor: pointer; }
+  .status { margin: 10px 0; font-size: .8rem; color: #94a3b8; min-height: 1.2em; }
+  .token-stream { font-size: .95rem; line-height: 1.6; color: #fbbf24; word-break: break-word; max-width: 1100px; }
+  .prompt-echo { color: #64748b; }
+  #tooltip {
+    position: fixed; pointer-events: none; display: none; z-index: 10;
+    background: #1e293b; border: 1px solid #475569; border-radius: 6px;
+    padding: 4px 8px; font-size: .75rem; color: #f1f5f9;
+  }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: #94a3b8; margin-top: 8px; }
+  .gradient { width: 160px; height: 10px; border-radius: 3px;
+    background: linear-gradient(90deg, #0b1220, #166534, #eab308, #f43f5e); }
+  #topk { font-size: .78rem; width: 230px; }
+  #topk div { display: flex; justify-content: space-between; padding: 1px 2px; }
+  #topk .idx { color: #94a3b8; }
+  #topk .val { color: #fbbf24; }
+</style>
+</head>
+<body>
+  <h1>Activación real de neuronas MLP por capa — GPT-2</h1>
+
+  <div class="controls">
+    <select id="model" title="Modelo"></select>
+    <input id="prompt" type="text" value="¿Qué cosas te puedo preguntar?" placeholder="Escribe un prompt...">
+    <input id="tokens" type="number" value="40" min="1" max="100" title="Tokens a generar">
+    <select id="mode" title="Muestreo">
+      <option value="sample">muestreo</option>
+      <option value="greedy">greedy</option>
+    </select>
+    <input id="temperature" type="number" value="0.8" step="0.1" min="0" title="temperature">
+    <input id="top_k" type="number" value="40" min="0" title="top_k">
+    <input id="rep_penalty" type="number" value="1.15" step="0.05" min="1" title="repetition_penalty">
+    <button id="send">Generar</button>
+  </div>
+
+  <div class="status" id="status">Conectando...</div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Top-16 neuronas por capa (clic en una fila para ver el heatmap)</h2>
+      <canvas id="overview" width="620" height="360"></canvas>
+      <div class="legend">
+        <span>valor</span><span class="gradient"></span>
+        <span>escala del paso: 0 → <b id="scale-max">–</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 id="heatmap-title">Heatmap · Capa 0 (3072 neuronas)</h2>
+      <canvas id="heatmap" width="768" height="576"></canvas>
+      <div class="legend">
+        <span>ventana actual</span>
+        <span style="color:#60a5fa">neg</span>
+        <span class="gradient"></span>
+        <span>máx</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Neuronas más activas (capa seleccionada)</h2>
+      <div id="topk"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px">
+    <h2>Salida del modelo</h2>
+    <div class="token-stream"><span class="prompt-echo" id="prompt-echo"></span><span id="stream"></span></div>
+  </div>
+
+  <div id="tooltip"></div>
+
+<script>
+const COLS = 64;            // 64 x 48 = 3072 neuronas por capa
+const ROWS = 48;
+const CELL = 12;
+
+let META = { layers: 12, neurons_per_layer: 3072, top_k: 16 };
+let selectedLayer = 0;
+let scaleMax = 1;
+let prev = {}, curr = {}, anim = { t: 1 };
+let topkData = {};
+let running = false;
+
+const overview = document.getElementById('overview');
+const heatmap = document.getElementById('heatmap');
+const octx = overview.getContext('2d');
+const hctx = heatmap.getContext('2d');
+const statusEl = document.getElementById('status');
+const streamEl = document.getElementById('stream');
+const promptEcho = document.getElementById('prompt-echo');
+const topkEl = document.getElementById('topk');
+const tooltip = document.getElementById('tooltip');
+const scaleMaxEl = document.getElementById('scale-max');
+const sendBtn = document.getElementById('send');
+const promptInput = document.getElementById('prompt');
+const tokensInput = document.getElementById('tokens');
+const modelSelect = document.getElementById('model');
+const modeSelect = document.getElementById('mode');
+const temperatureInput = document.getElementById('temperature');
+const topKInput = document.getElementById('top_k');
+const repPenaltyInput = document.getElementById('rep_penalty');
+
+// valor real -> "temperatura" 0..1 (sin normalizar por capa; escala global del paso)
+function norm(v) {
+  const t = Math.min(1, Math.abs(v) / (scaleMax || 1));
+  return Math.sqrt(t);
+}
+function colorFor(v) {
+  const t = norm(v);
+  if (v < 0) {
+    const b = Math.round(60 + t * 130);
+    return `rgb(${Math.round(20 + t * 40)}, ${Math.round(40 + t * 60)}, ${b})`;
+  }
+  if (t < 0.5) {                                  // oscuro -> verde
+    const k = t / 0.5;
+    return `rgb(${Math.round(8 + k * 14)}, ${Math.round(20 + k * 110)}, ${Math.round(32 + k * 20)})`;
+  }
+  if (t < 0.8) {                                  // verde -> amarillo
+    const k = (t - 0.5) / 0.3;
+    return `rgb(${Math.round(22 + k * 212)}, ${Math.round(130 + k * 49)}, ${Math.round(52 - k * 41)})`;
+  }
+  const k = (t - 0.8) / 0.2;                      // amarillo -> rojo
+  return `rgb(234, ${Math.round(179 - k * 116)}, ${Math.round(11 + k * 83)})`;
+}
+
+function lerpVal(layer, i) {
+  const a = (prev[layer] && prev[layer][i]) || 0;
+  const b = (curr[layer] && curr[layer][i]) || 0;
+  return a + (b - a) * anim.t;
+}
+
+function drawOverview() {
+  octx.clearRect(0, 0, overview.width, overview.height);
+  const rowH = overview.height / META.layers;
+  const labelW = 62;
+  const cellW = 15;
+  const cellGap = 2;
+
+  for (let l = 0; l < META.layers; l++) {
+    const key = `layer_${l}`;
+    const y = l * rowH;
+    if (l === selectedLayer) {
+      octx.fillStyle = 'rgba(56,189,248,0.08)';
+      octx.fillRect(0, y, overview.width, rowH);
+    }
+    octx.strokeStyle = '#1e293b';
+    octx.strokeRect(0.5, y + 0.5, overview.width - 1, rowH - 1);
+
+    octx.fillStyle = l === selectedLayer ? '#38bdf8' : '#64748b';
+    octx.font = '11px monospace';
+    octx.fillText(`capa ${l}`, 6, y + rowH / 2 + 4);
+
+    const top = topkData[key] || [];
+    let maxVal = 0;
+    for (let k = 0; k < META.top_k; k++) {
+      const x = labelW + k * (cellW + cellGap);
+      const item = top[k];
+      const v = item ? item[1] : 0;
+      if (item) maxVal = Math.max(maxVal, v);
+      octx.fillStyle = item ? colorFor(v) : '#0b1220';
+      octx.fillRect(x, y + 5, cellW, rowH - 10);
+    }
+    octx.fillStyle = '#475569';
+    octx.font = '10px monospace';
+    octx.fillText(maxVal.toFixed(2), overview.width - 42, y + rowH / 2 + 3);
+  }
+}
+
+function drawHeatmap() {
+  const key = `layer_${selectedLayer}`;
+  hctx.clearRect(0, 0, heatmap.width, heatmap.height);
+  for (let i = 0; i < META.neurons_per_layer; i++) {
+    const cx = i % COLS;
+    const cy = Math.floor(i / COLS);
+    hctx.fillStyle = colorFor(lerpVal(key, i));
+    hctx.fillRect(cx * CELL, cy * CELL, CELL - 1, CELL - 1);
+  }
+}
+
+function renderTopk() {
+  const key = `layer_${selectedLayer}`;
+  const items = topkData[key] || [];
+  topkEl.innerHTML = items.map(([idx, v]) =>
+    `<div><span class="idx">neurona ${idx}</span><span class="val">${v.toFixed(3)}</span></div>`
+  ).join('');
+}
+
+function frame() {
+  if (anim.t < 1) {
+    anim.t = Math.min(1, anim.t + 0.07);
+    drawOverview();
+    drawHeatmap();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+overview.addEventListener('click', (e) => {
+  const rowH = overview.height / META.layers;
+  const l = Math.floor((e.clientY - overview.getBoundingClientRect().top) / rowH);
+  if (l >= 0 && l < META.layers) {
+    selectedLayer = l;
+    document.getElementById('heatmap-title').textContent =
+      `Heatmap · Capa ${l} (${META.neurons_per_layer} neuronas)`;
+    renderTopk();
+    drawOverview();
+    drawHeatmap();
+  }
+});
+
+heatmap.addEventListener('mousemove', (e) => {
+  const r = heatmap.getBoundingClientRect();
+  const cx = Math.floor((e.clientX - r.left) / CELL);
+  const cy = Math.floor((e.clientY - r.top) / CELL);
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) { tooltip.style.display = 'none'; return; }
+  const i = cy * COLS + cx;
+  if (i >= META.neurons_per_layer) { tooltip.style.display = 'none'; return; }
+  const v = lerpVal(`layer_${selectedLayer}`, i);
+  tooltip.style.display = 'block';
+  tooltip.style.left = `${e.clientX + 14}px`;
+  tooltip.style.top = `${e.clientY + 14}px`;
+  tooltip.textContent = `capa ${selectedLayer} · neurona ${i} · ${v.toFixed(3)}`;
+});
+heatmap.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+
+function applyStep(data) {
+  prev = curr;
+  curr = {};
+  for (const [key, values] of Object.entries(data.activations)) {
+    curr[key] = values;
+  }
+  topkData = data.top;
+
+  let maxAbs = 1e-6;
+  for (const values of Object.values(data.activations)) {
+    for (const v of values) {
+      const a = Math.abs(v);
+      if (a > maxAbs) maxAbs = a;
+    }
+  }
+  scaleMax = maxAbs;
+  scaleMaxEl.textContent = maxAbs.toFixed(2);
+
+  anim.t = 0;
+  streamEl.textContent += data.token;
+  renderTopk();
+}
+
+let ws;
+let reconnectTimer;
+function connect() {
+  ws = new WebSocket(`ws://${location.host || 'localhost:8000'}/ws`);
+  ws.onopen = () => {
+    statusEl.textContent = 'Conectado. Escribe un prompt y pulsa Generar.';
+    sendBtn.disabled = false;
+  };
+  ws.onclose = () => {
+    statusEl.textContent = 'Desconectado. Reintentando...';
+    sendBtn.disabled = true;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'meta') {
+      META = { ...META, ...data };
+      promptEcho.textContent = data.chat ? '' : data.prompt;
+      streamEl.textContent = '';
+      statusEl.textContent =
+        `${data.model_label} · ${META.layers} capas × ${META.neurons_per_layer} neuronas · hooks en ${data.module_path}`;
+    } else if (data.type === 'step') {
+      applyStep(data);
+    } else if (data.type === 'done') {
+      running = false;
+      sendBtn.disabled = false;
+      statusEl.textContent = 'Generación terminada.';
+    }
+  };
+}
+connect();
+
+function numberOr(input, fallback) {
+  const v = parseFloat(input.value);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function send() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
+  running = true;
+  sendBtn.disabled = true;
+  const prompt = promptInput.value.trim() || 'Hola';
+  const tokens = Math.max(1, Math.min(100, parseInt(tokensInput.value || '40', 10)));
+  promptEcho.textContent = '';
+  streamEl.textContent = '';
+  ws.send(JSON.stringify({
+    prompt,
+    tokens,
+    model: modelSelect.value,
+    params: {
+      mode: modeSelect.value,
+      temperature: numberOr(temperatureInput, 0.8),
+      top_k: numberOr(topKInput, 40),
+      repetition_penalty: numberOr(repPenaltyInput, 1.15),
+      no_repeat_ngram: 0
+    }
+  }));
+}
+sendBtn.addEventListener('click', send);
+promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+
+fetch('/models').then(r => r.json()).then(data => {
+  modelSelect.innerHTML = data.models
+    .map(m => `<option value="${m.key}"${m.key === data.default ? ' selected' : ''}>${m.label}</option>`)
+    .join('');
+}).catch(() => {
+  modelSelect.innerHTML = '<option value="gpt2">GPT-2 base (124M)</option>';
+});
+</script>
+</body>
+</html>

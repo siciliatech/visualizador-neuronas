@@ -1,0 +1,36 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Modelos y caché de Hugging Face
+models/
+.cache/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Variables de entorno y secretos
+.env
+.env.*
+
+# Logs
+*.log
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
