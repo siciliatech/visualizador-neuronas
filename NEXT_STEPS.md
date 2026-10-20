@@ -44,7 +44,7 @@ EXPOSE 8000
 VOLUME ["/models"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/models')" || exit 1
+  CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')" || exit 1
 
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
@@ -262,7 +262,11 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
 
 - **MLP con compuerta (Qwen/LLaMA/Gemma):** resuelto con `blocks.{i}.mlp.hook_post`, que es
   `act_fn(gate_proj(x)) * up_proj(x)` (la neurona completa, antes de `down_proj`).
-- **Atención:** añadir un heatmap de cabezas de atención (`attn.hook_z` / `attn.hook_pattern`).
+- **Atención:** **implementado** — se captura `blocks.{i}.attn.hook_pattern`, se toma la última query
+  y se envían las top-8 conexiones por cabeza; la UI dibuja el fan y el mapa cabezas × tokens.
+- **Informe automático:** **implementado** — resume la generación en lenguaje claro (capa y neurona
+  récord, atención más fuerte, muestreo y motivo de parada) y explica los términos. Incluye botón
+  para copiar el informe.
 - **Comparar prompts:** guardar dos pasadas y mostrar el *diferencial* de activación (qué neuronas cambian).
 - **Ablación interactiva:** clic en una neurona → apagarla y ver cómo cambia el texto generado.
 - **Exportar:** volcar las activaciones de una generación a CSV/Parquet para analizarlas fuera.

@@ -2,382 +2,1556 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Visualizador de Activación Neuronal — GPT-2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El interior de una neurona artificial</title>
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --bg: #060a12;
+    --panel: rgba(15, 23, 42, .72);
+    --border: rgba(148, 163, 184, .14);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --dim: #64748b;
+    --accent: #22d3ee;
+    --warm: #fbbf24;
+    --green: #22c55e;
+    --danger: #ef4444;
+  }
   * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
   body {
-    margin: 0; padding: 16px;
-    background: #0f172a; color: #e2e8f0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    margin: 0;
+    padding: clamp(14px, 2vw, 28px);
+    background:
+      radial-gradient(1200px 600px at 12% -10%, rgba(34, 211, 238, .13), transparent 60%),
+      radial-gradient(900px 500px at 92% 0%, rgba(168, 85, 247, .10), transparent 55%),
+      radial-gradient(1000px 700px at 50% 115%, rgba(34, 197, 94, .07), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
   }
-  h1 { font-size: 1.1rem; margin: 0 0 12px; color: #38bdf8; }
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-  input[type=text] {
-    flex: 1 1 420px; padding: 8px 10px; background: #020617;
-    border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit;
+
+  /* ---------- Hero ---------- */
+  .hero {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 18px; flex-wrap: wrap; margin-bottom: 18px;
   }
-  input[type=number] { width: 72px; padding: 8px; background: #020617; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit; }
-  select { padding: 8px; background: #020617; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font: inherit; }
-  label { font-size: .72rem; color: #64748b; }
-  button {
-    padding: 8px 16px; background: #0284c7; color: #f8fafc; border: 0;
-    border-radius: 6px; font: inherit; cursor: pointer;
+  .brand { display: flex; gap: 14px; align-items: center; }
+  .logo {
+    width: 48px; height: 48px; border-radius: 15px; flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 22px; color: #04222b;
+    background: radial-gradient(circle at 30% 25%, #a5f3fc, #22d3ee 45%, #7c3aed);
+    box-shadow: 0 0 30px rgba(34, 211, 238, .45), inset 0 0 12px rgba(255, 255, 255, .35);
+    animation: logoPulse 3s ease-in-out infinite;
   }
-  button:disabled { background: #334155; cursor: default; }
-  .layout { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
-  .panel { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 10px; }
-  .panel h2 { font-size: .8rem; margin: 0 0 8px; color: #94a3b8; font-weight: 500; }
-  canvas { display: block; }
+  @keyframes logoPulse {
+    50% { box-shadow: 0 0 46px rgba(34, 211, 238, .72), inset 0 0 14px rgba(255, 255, 255, .5); }
+  }
+  h1 { margin: 0; font-size: clamp(1.15rem, 2.2vw, 1.7rem); letter-spacing: -.01em; }
+  .tagline { margin: 3px 0 0; color: var(--muted); font-size: .9rem; max-width: 62ch; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font: 600 .72rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--muted); background: rgba(148, 163, 184, .08);
+    border: 1px solid var(--border); padding: 5px 10px; border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  /* ---------- Cards ---------- */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 18px 50px -30px rgba(0, 0, 0, .9);
+    backdrop-filter: blur(6px);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+    padding: 14px; margin-bottom: 8px;
+  }
+  .control { display: flex; flex-direction: column; gap: 5px; }
+  .control label {
+    font-size: .66rem; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--dim); font-weight: 700;
+  }
+  .control.grow { flex: 1 1 300px; }
+  input[type=text], input[type=number], select {
+    background: #0a1120; border: 1px solid rgba(148, 163, 184, .22);
+    border-radius: 10px; color: var(--text); font: inherit; padding: 9px 11px;
+    outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, .16);
+  }
+  input[type=number] { width: 84px; }
+  .action { flex-direction: row; align-items: center; gap: 10px; }
+  button#send {
+    padding: 10px 22px; border: 0; border-radius: 10px; cursor: pointer;
+    font: 600 .95rem inherit; color: #03212a;
+    background: linear-gradient(135deg, #a5f3fc, #22d3ee 45%, #0ea5e9);
+    box-shadow: 0 8px 26px -10px rgba(34, 211, 238, .8);
+    transition: transform .12s, box-shadow .15s, filter .15s;
+  }
+  button#send:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px -10px rgba(34, 211, 238, .95);
+  }
+  button#send:disabled { filter: grayscale(.65) brightness(.7); cursor: default; box-shadow: none; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .74rem; color: var(--muted); white-space: nowrap;
+  }
+  .badge::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: #64748b; flex: 0 0 auto;
+  }
+  .badge.ready { color: #86efac; }
+  .badge.ready::before { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .badge.loading { color: #fde68a; }
+  .badge.loading::before { background: #eab308; animation: pulse 1s ease-in-out infinite; }
+  .badge.error { color: #fca5a5; }
+  .badge.error::before { background: var(--danger); }
+  @keyframes pulse { 50% { opacity: .22; } }
+
+  .statusbar {
+    display: flex; align-items: center; gap: 8px; min-height: 1.3em;
+    padding: 0 6px 12px; color: var(--muted); font-size: .82rem;
+  }
+  .statusbar::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent); flex: 0 0 auto;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(250px, .9fr) minmax(380px, 1.45fr) minmax(250px, .8fr);
+    gap: 16px; align-items: start;
+  }
+  .panel { padding: 14px; }
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .panel-head h2 {
+    margin: 0; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .hint { font-size: .67rem; color: var(--dim); }
+  canvas { display: block; max-width: 100%; height: auto; border-radius: 8px; }
   #overview { cursor: pointer; }
-  .status { margin: 10px 0; font-size: .8rem; color: #94a3b8; min-height: 1.2em; }
-  .token-stream { font-size: .95rem; line-height: 1.6; color: #fbbf24; word-break: break-word; max-width: 1100px; }
-  .prompt-echo { color: #64748b; }
-  #tooltip {
-    position: fixed; pointer-events: none; display: none; z-index: 10;
-    background: #1e293b; border: 1px solid #475569; border-radius: 6px;
-    padding: 4px 8px; font-size: .75rem; color: #f1f5f9;
+
+  .legend {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 10px; font-size: .68rem; color: var(--dim);
   }
-  .legend { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: #94a3b8; margin-top: 8px; }
-  .gradient { width: 160px; height: 10px; border-radius: 3px;
-    background: linear-gradient(90deg, #0b1220, #166534, #eab308, #f43f5e); }
-  #topk { font-size: .78rem; width: 230px; }
-  #topk div { display: flex; justify-content: space-between; padding: 1px 2px; }
-  #topk .idx { color: #94a3b8; }
-  #topk .val { color: #fbbf24; }
+  .gradient {
+    flex: 1; min-width: 90px; height: 9px; border-radius: 99px;
+    background: linear-gradient(90deg, #070b14, #0e7490 18%, #22c55e 42%, #eab308 68%, #f97316 86%, #ef4444);
+  }
+
+  /* ---------- Top-k ---------- */
+  #topk { display: flex; flex-direction: column; gap: 5px; }
+  .topk-row {
+    display: grid; grid-template-columns: 54px 1fr 60px; gap: 8px; align-items: center;
+    width: 100%; padding: 3px 4px; border: 0; border-radius: 6px;
+    background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .topk-row:hover { background: rgba(148, 163, 184, .09); }
+  .topk-row.sel { background: rgba(34, 211, 238, .13); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .4); }
+  .topk-row .idx { font: 600 .72rem ui-monospace, monospace; color: var(--muted); }
+  .topk-row .val { font: 600 .75rem ui-monospace, monospace; color: var(--warm); text-align: right; }
+  .topk-row .bar { height: 7px; border-radius: 99px; background: rgba(148, 163, 184, .12); overflow: hidden; }
+  .topk-row .bar i {
+    display: block; height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, #0ea5e9, #22d3ee 45%, #fbbf24);
+    transition: width .35s cubic-bezier(.22, 1, .36, 1);
+  }
+
+  /* ---------- Detail ---------- */
+  .detail { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+  .detail-row { display: flex; justify-content: space-between; font-size: .82rem; color: var(--muted); padding: 2px 0; }
+  .detail-row b { color: var(--text); font-family: ui-monospace, monospace; }
+  #spark { width: 100%; height: auto; margin-top: 10px; background: #070d18; border: 1px solid var(--border); border-radius: 8px; }
+  .muted { color: var(--dim); font-size: .8rem; }
+  .small { font-size: .67rem; margin-top: 4px; }
+
+  /* ---------- Stream ---------- */
+  .stream-panel { margin-top: 16px; padding: 16px; }
+  .token-stream {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1rem; line-height: 1.7; word-break: break-word; min-height: 3.2em;
+  }
+  .prompt-echo { color: var(--dim); }
+  #stream { color: #fde68a; }
+  .tok { animation: tokIn .4s cubic-bezier(.22, 1, .36, 1); }
+  @keyframes tokIn { from { opacity: 0; filter: blur(4px); } to { opacity: 1; filter: blur(0); } }
+  .caret {
+    display: inline-block; width: 9px; height: 1.05em; margin-left: 2px;
+    vertical-align: -2px; border-radius: 1px; background: var(--accent);
+    animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Informe ---------- */
+  .report-panel { margin-top: 16px; padding: 16px; }
+  .ghost-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 5px 12px; font: 600 .72rem inherit; cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .ghost-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .report { font-size: .9rem; color: var(--muted); line-height: 1.6; }
+  .report p { margin: 0 0 10px; }
+  .report b { color: var(--text); }
+  .report .report-note {
+    border-left: 3px solid var(--warm); padding: 6px 12px;
+    background: rgba(251, 191, 36, .07); border-radius: 0 8px 8px 0;
+    color: #fde68a;
+  }
+  .report-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+  .report-grid .stat {
+    background: rgba(148, 163, 184, .06); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 12px;
+  }
+  .report-grid .k {
+    font-size: .64rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); font-weight: 700;
+  }
+  .report-grid .v {
+    font: 600 .85rem ui-monospace, monospace; color: var(--text); margin-top: 3px;
+    word-break: break-word;
+  }
+  .report-glossary {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 20px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .report-glossary div { font-size: .8rem; }
+  .report-glossary b { color: #a5f3fc; }
+  @media (max-width: 760px) {
+    .report-grid { grid-template-columns: 1fr 1fr; }
+    .report-glossary { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Atención ---------- */
+  .attn-panel { margin-top: 16px; padding: 16px; }
+  .attn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .attn-col { min-width: 0; }
+  .attn-sub {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 8px; min-height: 24px;
+  }
+  .attn-sub-title {
+    font-size: .68rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--dim); font-weight: 700;
+  }
+  .attn-sub-title b { color: #c4b5fd; }
+  .attn-heads { display: flex; gap: 4px; flex-wrap: wrap; }
+  .attn-heads button {
+    font: 600 .68rem ui-monospace, monospace; color: var(--muted);
+    background: rgba(148, 163, 184, .08); border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 9px; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .attn-heads button:hover { border-color: rgba(167, 139, 250, .5); }
+  .attn-heads button.sel {
+    color: #ddd6fe; border-color: rgba(167, 139, 250, .65);
+    background: rgba(139, 92, 246, .18);
+  }
+  #attnfan, #attnmap {
+    width: 100%; height: auto; background: #070d18;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  .attn-legend {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    font-size: .66rem; color: var(--dim);
+  }
+  .attn-gradient {
+    flex: 1; min-width: 80px; height: 7px; border-radius: 99px;
+    background: linear-gradient(90deg, #070b14, #312e81 20%, #6d28d9 45%, #c026d3 70%, #f472b6 88%, #ffffff);
+  }
+  @media (max-width: 1000px) {
+    .attn-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Explainer ---------- */
+  .explainer { margin-top: 16px; padding: 0 16px; }
+  .explainer summary {
+    display: flex; align-items: center; gap: 8px; padding: 14px 0;
+    cursor: pointer; list-style: none; font-weight: 700; font-size: .9rem; color: var(--accent);
+  }
+  .explainer summary::-webkit-details-marker { display: none; }
+  .explainer summary::before { content: '▸'; color: var(--dim); transition: transform .2s; }
+  .explainer[open] summary::before { transform: rotate(90deg); }
+  .explainer-body { padding: 0 0 16px; color: var(--muted); font-size: .88rem; }
+  .explainer-body ul { margin: 8px 0 0; padding-left: 20px; }
+  .explainer-body li { margin: 5px 0; }
+  .explainer-body b { color: var(--text); }
+
+  /* ---------- Tooltip ---------- */
+  #tooltip {
+    position: fixed; pointer-events: none; display: none; z-index: 50;
+    background: rgba(8, 15, 28, .95); border: 1px solid rgba(34, 211, 238, .35);
+    border-radius: 8px; padding: 6px 10px; color: #e0f2fe;
+    font: 600 .75rem ui-monospace, monospace;
+    box-shadow: 0 10px 30px -10px #000;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 1fr 1.4fr; }
+    .side { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .detail { border-top: 0; margin-top: 0; padding-top: 0; border-left: 1px solid var(--border); padding-left: 16px; }
+  }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { grid-template-columns: 1fr; }
+    .detail { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  }
 </style>
 </head>
 <body>
-  <h1>Activación real de neuronas MLP por capa — GPT-2</h1>
 
-  <div class="controls">
+<header class="hero">
+  <div class="brand">
+    <div class="logo">◉</div>
+    <div>
+      <h1>El interior de una neurona artificial</h1>
+      <p class="tagline">Mira cómo se encienden las neuronas de la MLP, capa por capa, mientras el modelo escribe token a token.</p>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chip-model">modelo —</span>
+    <span class="chip" id="chip-layers">— capas</span>
+    <span class="chip" id="chip-neurons">— neuronas/capa</span>
+    <span class="chip" id="chip-token">token 0</span>
+  </div>
+</header>
+
+<section class="controls card">
+  <div class="control">
+    <label for="model">Modelo</label>
     <select id="model" title="Modelo"></select>
-    <input id="prompt" type="text" value="¿Qué cosas te puedo preguntar?" placeholder="Escribe un prompt...">
+  </div>
+  <div class="control grow">
+    <label for="prompt">Prompt</label>
+    <input id="prompt" type="text" value="¿Qué cosas te puedo preguntar?" placeholder="Escribe un prompt…">
+  </div>
+  <div class="control">
+    <label for="tokens">Tokens</label>
     <input id="tokens" type="number" value="40" min="1" max="100" title="Tokens a generar">
+  </div>
+  <div class="control">
+    <label for="mode">Muestreo</label>
     <select id="mode" title="Muestreo">
       <option value="sample">muestreo</option>
       <option value="greedy">greedy</option>
     </select>
+  </div>
+  <div class="control">
+    <label for="temperature">Temp</label>
     <input id="temperature" type="number" value="0.8" step="0.1" min="0" title="temperature">
+  </div>
+  <div class="control">
+    <label for="top_k">Top-k</label>
     <input id="top_k" type="number" value="40" min="0" title="top_k">
+  </div>
+  <div class="control">
+    <label for="rep_penalty">Rep. penalty</label>
     <input id="rep_penalty" type="number" value="1.15" step="0.05" min="1" title="repetition_penalty">
+  </div>
+  <div class="control action">
     <button id="send">Generar</button>
+    <span id="model-badge" class="badge idle" title="Estado del modelo">sin cargar</span>
   </div>
+</section>
 
-  <div class="status" id="status">Conectando...</div>
+<div class="statusbar"><span id="status">Conectando…</span></div>
 
-  <div class="layout">
-    <div class="panel">
-      <h2>Top-16 neuronas por capa (clic en una fila para ver el heatmap)</h2>
-      <canvas id="overview" width="620" height="360"></canvas>
-      <div class="legend">
-        <span>valor</span><span class="gradient"></span>
-        <span>escala del paso: 0 → <b id="scale-max">–</b></span>
-      </div>
+<main class="layout">
+  <section class="panel card overview-panel">
+    <div class="panel-head">
+      <h2>La señal recorre las capas</h2>
+      <span class="hint">clic en una capa</span>
     </div>
-
-    <div class="panel">
-      <h2 id="heatmap-title">Heatmap · Capa 0 (3072 neuronas)</h2>
-      <canvas id="heatmap" width="768" height="576"></canvas>
-      <div class="legend">
-        <span>ventana actual</span>
-        <span style="color:#60a5fa">neg</span>
-        <span class="gradient"></span>
-        <span>máx</span>
-      </div>
+    <canvas id="overview" width="640" height="420"></canvas>
+    <div class="legend">
+      <span>Top-16 por capa</span>
+      <span class="gradient"></span>
+      <span>0 → <b id="scale-max">–</b></span>
     </div>
+  </section>
 
-    <div class="panel">
-      <h2>Neuronas más activas (capa seleccionada)</h2>
+  <section class="panel card heatmap-panel">
+    <div class="panel-head">
+      <h2 id="heatmap-title">Mapa de neuronas · Capa 0</h2>
+      <span class="hint">cada celda = una neurona</span>
+    </div>
+    <canvas id="heatmap" width="768" height="576"></canvas>
+    <div class="legend">
+      <span style="color:#60a5fa">neg</span>
+      <span class="gradient"></span>
+      <span>máx</span>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="panel card">
+      <div class="panel-head">
+        <h2>Neuronas más activas</h2>
+        <span class="hint" id="topk-layer">capa 0</span>
+      </div>
       <div id="topk"></div>
+    </section>
+
+    <section class="panel card detail">
+      <div class="panel-head">
+        <h2>Neurona seleccionada</h2>
+      </div>
+      <div id="detail-empty" class="muted">Haz clic en una neurona del mapa o en el ranking.</div>
+      <div id="detail-body" hidden>
+        <div class="detail-row"><span>Neurona</span><b id="d-neuron">—</b></div>
+        <div class="detail-row"><span>Valor actual</span><b id="d-value">—</b></div>
+        <div class="detail-row"><span>Ranking</span><b id="d-rank">—</b></div>
+        <canvas id="spark" width="260" height="76"></canvas>
+        <div class="muted small">Su activación en los últimos tokens.</div>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<section class="panel card attn-panel">
+  <div class="panel-head">
+    <h2>Atención: a qué mira el token</h2>
+    <span class="hint" id="attn-hint">conexiones reales entre tokens</span>
+  </div>
+  <div class="attn-grid">
+    <div class="attn-col">
+      <div class="attn-sub">
+        <span class="attn-sub-title">Cabeza de atención</span>
+        <div class="attn-heads" id="attn-heads"></div>
+      </div>
+      <canvas id="attnfan" width="760" height="210"></canvas>
+      <div class="attn-legend">
+        <span>0</span><span class="attn-gradient"></span><span>peso de atención</span>
+      </div>
+      <div class="muted small">Cada línea une el token que predice con sus 8 conexiones más fuertes. Grosor = peso de atención.</div>
+    </div>
+    <div class="attn-col">
+      <div class="attn-sub">
+        <span class="attn-sub-title">Todas las cabezas · capa <b id="attn-layer">0</b></span>
+      </div>
+      <canvas id="attnmap" width="760" height="230"></canvas>
+      <div class="attn-legend">
+        <span>0</span><span class="attn-gradient"></span><span>1</span>
+      </div>
+      <div class="muted small">Filas = cabezas · columnas = tokens · brillo = atención.</div>
     </div>
   </div>
-
-  <div class="panel" style="margin-top:18px">
-    <h2>Salida del modelo</h2>
-    <div class="token-stream"><span class="prompt-echo" id="prompt-echo"></span><span id="stream"></span></div>
+  <div id="attn-empty" class="muted" hidden>
+    Este modelo no expone patrones de atención en el bridge; el resto del visualizador funciona igual.
   </div>
+</section>
 
-  <div id="tooltip"></div>
+<section class="panel card stream-panel">
+  <div class="panel-head">
+    <h2>El modelo escribe</h2>
+    <span class="hint" id="stream-hint">cada token es una nueva pasada por todas las capas</span>
+  </div>
+  <div class="token-stream">
+    <span class="prompt-echo" id="prompt-echo"></span><span id="stream"></span><span class="caret" id="caret" style="display:none"></span>
+  </div>
+</section>
+
+<section class="panel card report-panel">
+  <div class="panel-head">
+    <h2>Informe: ¿qué pasó en esta generación?</h2>
+    <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
+  </div>
+  <div id="report" class="report">
+    <p class="muted">Pulsa <b>Generar</b> y aquí aparecerá un informe en lenguaje claro con lo que ocurrió por dentro.</p>
+  </div>
+</section>
+
+<details class="explainer card">
+  <summary>¿Qué estoy viendo?</summary>
+  <div class="explainer-body">
+    <p>Estás viendo las <b>neuronas de la MLP</b> de un transformer: los “perceptrones” internos que transforman la información en cada capa.</p>
+    <ul>
+      <li><b>Cada celda</b> del mapa es una neurona. El color indica cuánto se activa: oscuro = poco, verde/amarillo/rojo = mucho; azul = activación negativa.</li>
+      <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus 16 neuronas más activas.</li>
+      <li><b>Cada token</b> es una pasada completa por el modelo: por eso el patrón cambia y se anima.</li>
+      <li>Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
+      <li>El panel de <b>atención</b> muestra las conexiones reales: a qué tokens anteriores mira cada cabeza al predecir el siguiente. Cada cabeza es un “canal” distinto.</li>
+    </ul>
+    <p class="small">Nota: esto muestra activaciones, no “pensamientos” ni conexiones físicas. Es una ventana a los números con los que el modelo calcula.</p>
+  </div>
+</details>
+
+<div id="tooltip"></div>
 
 <script>
-let COLS = 64;              // se recalcula por modelo (64 x 48 = 3072 neuronas)
-let ROWS = 48;
-const CELL = 12;
+  /* =========================================================
+     Configuración y estado
+     ========================================================= */
+  let COLS = 64;              // se recalcula por modelo
+  let ROWS = 48;
+  const CELL = 12;
 
-// Elige las dimensiones del grid para `n` neuronas con relación ~4:3,
-// minimizando celdas vacías. 3072 -> 64x48, 1024 -> 37x28, 768 -> 32x24.
-function gridDims(n) {
-  if (!n || n < 1) return { cols: 64, rows: 48 };
-  const target = 4 / 3;
-  const ideal = Math.max(1, Math.round(Math.sqrt(n * target)));
-  let best = null;
-  for (let cols = Math.max(1, Math.round(ideal * 0.6)); cols <= Math.round(ideal * 1.6) + 1; cols++) {
-    const rows = Math.ceil(n / cols);
-    const waste = cols * rows - n;                       // celdas vacías
-    const aspectErr = Math.abs(Math.log((cols / rows) / target));
-    const score = waste / n + aspectErr * 0.5;
-    if (!best || score < best.score) best = { cols, rows, score };
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const ease = (t) => 1 - Math.pow(1 - clamp(t), 3);
+
+  let META = { layers: 12, neurons_per_layer: 3072, top_k: 16 };
+  let selectedLayer = 0;
+  let selectedNeuron = null;
+  let scaleMax = 1;
+  let prev = {}, curr = {}, topkData = {};
+  let spark = [];
+  let tokenCount = 0;
+  let running = false;
+  let needsDraw = true;
+  const anim = { start: performance.now(), dur: 420 };
+
+  let attnData = { tokens: [], layers: {} };
+  let attnMeta = { available: false, heads: 0, top_k: 8 };
+  let attnHead = 0;
+  let attnGeom = null;
+
+  function emptyReport() {
+    return {
+      prompt: '', tokens: 0, requested: 0, startedAt: 0, firstStepAt: 0, elapsed: 0,
+      modelLabel: '', layers: 0, neurons: 0, stopped: '',
+      maxAct: { value: -Infinity, layer: 0, neuron: 0, token: '' },
+      maxLayerMean: { value: -Infinity, layer: 0 },
+      strongestAttn: { weight: -Infinity, layer: 0, head: 0, pos: 0, token: '', predicted: '' },
+      sampling: null,
+    };
   }
-  return { cols: best.cols, rows: best.rows };
-}
+  let report = emptyReport();
 
-// Ajusta el canvas del heatmap al número real de neuronas del modelo cargado.
-function resizeHeatmap() {
-  const g = gridDims(META.neurons_per_layer);
-  COLS = g.cols;
-  ROWS = g.rows;
-  heatmap.width = COLS * CELL;
-  heatmap.height = ROWS * CELL;
-}
-
-let META = { layers: 12, neurons_per_layer: 3072, top_k: 16 };
-let selectedLayer = 0;
-let scaleMax = 1;
-let prev = {}, curr = {}, anim = { t: 1 };
-let topkData = {};
-let running = false;
-
-const overview = document.getElementById('overview');
-const heatmap = document.getElementById('heatmap');
-const octx = overview.getContext('2d');
-const hctx = heatmap.getContext('2d');
-const statusEl = document.getElementById('status');
-const streamEl = document.getElementById('stream');
-const promptEcho = document.getElementById('prompt-echo');
-const topkEl = document.getElementById('topk');
-const tooltip = document.getElementById('tooltip');
-const scaleMaxEl = document.getElementById('scale-max');
-const sendBtn = document.getElementById('send');
-const promptInput = document.getElementById('prompt');
-const tokensInput = document.getElementById('tokens');
-const modelSelect = document.getElementById('model');
-const modeSelect = document.getElementById('mode');
-const temperatureInput = document.getElementById('temperature');
-const topKInput = document.getElementById('top_k');
-const repPenaltyInput = document.getElementById('rep_penalty');
-
-// valor real -> "temperatura" 0..1 (sin normalizar por capa; escala global del paso)
-function norm(v) {
-  const t = Math.min(1, Math.abs(v) / (scaleMax || 1));
-  return Math.sqrt(t);
-}
-function colorFor(v) {
-  const t = norm(v);
-  if (v < 0) {
-    const b = Math.round(60 + t * 130);
-    return `rgb(${Math.round(20 + t * 40)}, ${Math.round(40 + t * 60)}, ${b})`;
-  }
-  if (t < 0.5) {                                  // oscuro -> verde
-    const k = t / 0.5;
-    return `rgb(${Math.round(8 + k * 14)}, ${Math.round(20 + k * 110)}, ${Math.round(32 + k * 20)})`;
-  }
-  if (t < 0.8) {                                  // verde -> amarillo
-    const k = (t - 0.5) / 0.3;
-    return `rgb(${Math.round(22 + k * 212)}, ${Math.round(130 + k * 49)}, ${Math.round(52 - k * 41)})`;
-  }
-  const k = (t - 0.8) / 0.2;                      // amarillo -> rojo
-  return `rgb(234, ${Math.round(179 - k * 116)}, ${Math.round(11 + k * 83)})`;
-}
-
-function lerpVal(layer, i) {
-  const a = (prev[layer] && prev[layer][i]) || 0;
-  const b = (curr[layer] && curr[layer][i]) || 0;
-  return a + (b - a) * anim.t;
-}
-
-function drawOverview() {
-  octx.clearRect(0, 0, overview.width, overview.height);
-  const rowH = overview.height / META.layers;
-  const labelW = 62;
-  const cellW = 15;
-  const cellGap = 2;
-
-  for (let l = 0; l < META.layers; l++) {
-    const key = `layer_${l}`;
-    const y = l * rowH;
-    if (l === selectedLayer) {
-      octx.fillStyle = 'rgba(56,189,248,0.08)';
-      octx.fillRect(0, y, overview.width, rowH);
+  /* =========================================================
+     Paleta (LUT) y sprite de glow
+     ========================================================= */
+  function makeLUT(stops) {
+    const lut = new Array(256);
+    for (let i = 0; i < 256; i++) {
+      const t = i / 255;
+      let a = stops[0], b = stops[stops.length - 1];
+      for (let j = 1; j < stops.length; j++) {
+        if (t <= stops[j][0]) { a = stops[j - 1]; b = stops[j]; break; }
+      }
+      const span = (b[0] - a[0]) || 1;
+      const k = clamp((t - a[0]) / span);
+      lut[i] = `rgb(${Math.round(a[1][0] + (b[1][0] - a[1][0]) * k)},${Math.round(a[1][1] + (b[1][1] - a[1][1]) * k)},${Math.round(a[1][2] + (b[1][2] - a[1][2]) * k)})`;
     }
-    octx.strokeStyle = '#1e293b';
-    octx.strokeRect(0.5, y + 0.5, overview.width - 1, rowH - 1);
+    return lut;
+  }
+  const POS_LUT = makeLUT([
+    [0, [7, 11, 20]], [.16, [13, 74, 92]], [.40, [14, 116, 144]],
+    [.62, [34, 197, 94]], [.80, [234, 179, 8]], [.92, [249, 115, 22]], [1, [239, 68, 68]]
+  ]);
+  const NEG_LUT = makeLUT([[0, [7, 11, 20]], [.55, [30, 58, 138]], [1, [96, 165, 250]]]);
+  const ATTN_LUT = makeLUT([
+    [0, [7, 11, 20]], [.20, [49, 46, 129]], [.45, [109, 40, 217]],
+    [.70, [192, 38, 211]], [.88, [244, 114, 182]], [1, [255, 255, 255]]
+  ]);
 
-    octx.fillStyle = l === selectedLayer ? '#38bdf8' : '#64748b';
-    octx.font = '11px monospace';
-    octx.fillText(`capa ${l}`, 6, y + rowH / 2 + 4);
+  function colorFor(v) {
+    const t = Math.min(1, Math.abs(v) / (scaleMax || 1));
+    const idx = Math.round(Math.pow(t, 0.55) * 255);
+    return v < 0 ? NEG_LUT[idx] : POS_LUT[idx];
+  }
 
+  function attnColor(w) {
+    const idx = Math.round(Math.pow(clamp(w), 0.7) * 255);
+    return ATTN_LUT[idx];
+  }
+
+  const glowSprite = document.createElement('canvas');
+  glowSprite.width = glowSprite.height = 64;
+  (function buildGlow() {
+    const g = glowSprite.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(.4, 'rgba(255,255,255,.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+  })();
+
+  /* =========================================================
+     Referencias
+     ========================================================= */
+  const overview = document.getElementById('overview');
+  const heatmap = document.getElementById('heatmap');
+  const octx = overview.getContext('2d');
+  const hctx = heatmap.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const streamEl = document.getElementById('stream');
+  const promptEcho = document.getElementById('prompt-echo');
+  const caret = document.getElementById('caret');
+  const topkEl = document.getElementById('topk');
+  const topkLayer = document.getElementById('topk-layer');
+  const tooltip = document.getElementById('tooltip');
+  const scaleMaxEl = document.getElementById('scale-max');
+  const sendBtn = document.getElementById('send');
+  const promptInput = document.getElementById('prompt');
+  const tokensInput = document.getElementById('tokens');
+  const modelSelect = document.getElementById('model');
+  const modeSelect = document.getElementById('mode');
+  const temperatureInput = document.getElementById('temperature');
+  const topKInput = document.getElementById('top_k');
+  const repPenaltyInput = document.getElementById('rep_penalty');
+  const modelBadge = document.getElementById('model-badge');
+  const chipModel = document.getElementById('chip-model');
+  const chipLayers = document.getElementById('chip-layers');
+  const chipNeurons = document.getElementById('chip-neurons');
+  const chipToken = document.getElementById('chip-token');
+  const detailEmpty = document.getElementById('detail-empty');
+  const detailBody = document.getElementById('detail-body');
+  const dNeuron = document.getElementById('d-neuron');
+  const dValue = document.getElementById('d-value');
+  const dRank = document.getElementById('d-rank');
+  const sparkCanvas = document.getElementById('spark');
+  const sparkCtx = sparkCanvas.getContext('2d');
+  const attnFan = document.getElementById('attnfan');
+  const attnMap = document.getElementById('attnmap');
+  const attnFanCtx = attnFan.getContext('2d');
+  const attnMapCtx = attnMap.getContext('2d');
+  const attnHeadsEl = document.getElementById('attn-heads');
+  const attnLayerEl = document.getElementById('attn-layer');
+  const attnEmpty = document.getElementById('attn-empty');
+  const attnGrid = document.querySelector('.attn-grid');
+  const reportEl = document.getElementById('report');
+  const copyReportBtn = document.getElementById('copy-report');
+
+  function setBadge(state, text) {
+    modelBadge.className = `badge ${state}`;
+    modelBadge.textContent = text;
+  }
+
+  /* =========================================================
+     Grid adaptable
+     ========================================================= */
+  function gridDims(n) {
+    if (!n || n < 1) return { cols: 64, rows: 48 };
+    const target = 4 / 3;
+    const ideal = Math.max(1, Math.round(Math.sqrt(n * target)));
+    let best = null;
+    for (let cols = Math.max(1, Math.round(ideal * 0.6)); cols <= Math.round(ideal * 1.6) + 1; cols++) {
+      const rows = Math.ceil(n / cols);
+      const waste = cols * rows - n;
+      const aspectErr = Math.abs(Math.log((cols / rows) / target));
+      const score = waste / n + aspectErr * 0.5;
+      if (!best || score < best.score) best = { cols, rows, score };
+    }
+    return { cols: best.cols, rows: best.rows };
+  }
+
+  function resizeHeatmap() {
+    const g = gridDims(META.neurons_per_layer);
+    COLS = g.cols;
+    ROWS = g.rows;
+    heatmap.width = COLS * CELL;
+    heatmap.height = ROWS * CELL;
+    needsDraw = true;
+  }
+
+  // El overview se dibuja a la resolución real del panel para que las
+  // etiquetas se lean bien en cualquier pantalla/proyector.
+  function layoutOverview() {
+    const w = Math.max(300, Math.round(overview.getBoundingClientRect().width || 640));
+    const h = Math.max(300, Math.round(w * 0.8));
+    if (overview.width !== w || overview.height !== h) {
+      overview.width = w;
+      overview.height = h;
+      needsDraw = true;
+    }
+  }
+  function layoutAttention() {
+    const wf = Math.max(300, Math.round(attnFan.getBoundingClientRect().width || 760));
+    if (attnFan.width !== wf) { attnFan.width = wf; attnFan.height = 210; }
+    const wm = Math.max(300, Math.round(attnMap.getBoundingClientRect().width || 760));
+    if (attnMap.width !== wm) { attnMap.width = wm; attnMap.height = 230; }
+    needsDraw = true;
+  }
+  layoutOverview();
+  layoutAttention();
+  window.addEventListener('resize', () => {
+    layoutOverview();
+    layoutAttention();
+    needsDraw = true;
+  });
+
+  /* =========================================================
+     Dibujo
+     ========================================================= */
+  function animT() {
+    return REDUCED ? 1 : ease((performance.now() - anim.start) / anim.dur);
+  }
+
+  function lerpVal(layer, i, t) {
+    const a = (prev[layer] && prev[layer][i]) || 0;
+    const b = (curr[layer] && curr[layer][i]) || 0;
+    return a + (b - a) * t;
+  }
+
+  function drawOverview(now) {
+    const w = overview.width, h = overview.height;
+    octx.clearRect(0, 0, w, h);
+
+    const n = Math.max(1, META.layers);
+    const rowH = h / n;
+    const labelW = 78, gap = 3;
+    const avail = w - labelW - 56;
+    const cellW = Math.max(5, Math.min(14, Math.floor(avail / Math.max(1, META.top_k)) - gap));
+    const p = REDUCED ? 1 : clamp((now - anim.start) / 780);
+
+    // Espina de la señal
+    octx.strokeStyle = 'rgba(34,211,238,.16)';
+    octx.lineWidth = 2;
+    octx.beginPath();
+    octx.moveTo(20, rowH * .25);
+    octx.lineTo(20, h - rowH * .25);
+    octx.stroke();
+
+    // Onda que baja por las capas
+    if (p < 1) {
+      const wy = p * h;
+      const g = octx.createLinearGradient(0, wy - 26, 0, wy + 26);
+      g.addColorStop(0, 'rgba(34,211,238,0)');
+      g.addColorStop(.5, 'rgba(34,211,238,.22)');
+      g.addColorStop(1, 'rgba(34,211,238,0)');
+      octx.fillStyle = g;
+      octx.fillRect(0, wy - 26, w, 52);
+    }
+
+    for (let l = 0; l < n; l++) {
+      const y = l * rowH;
+      const sel = l === selectedLayer;
+
+      if (sel) {
+        octx.fillStyle = 'rgba(34,211,238,.10)';
+        octx.fillRect(0, y, w, rowH);
+        octx.fillStyle = '#22d3ee';
+        octx.fillRect(0, y, 3, rowH);
+      }
+
+      octx.strokeStyle = 'rgba(148,163,184,.10)';
+      octx.beginPath();
+      octx.moveTo(0, y + rowH);
+      octx.lineTo(w, y + rowH);
+      octx.stroke();
+
+      octx.fillStyle = sel ? '#67e8f9' : '#64748b';
+      octx.font = '600 11px ui-monospace, monospace';
+      octx.fillText(`capa ${l}`, 26, y + rowH / 2 + 4);
+
+      const top = topkData[`layer_${l}`] || [];
+      let maxVal = 0;
+      for (let k = 0; k < META.top_k; k++) {
+        const x = labelW + k * (cellW + gap);
+        const item = top[k];
+        const v = item ? item[1] : 0;
+        if (item) maxVal = Math.max(maxVal, v);
+        octx.fillStyle = item ? colorFor(v) : 'rgba(148,163,184,.05)';
+        octx.fillRect(x, y + rowH * .18, cellW, rowH * .64);
+      }
+
+      octx.fillStyle = '#475569';
+      octx.font = '10px ui-monospace, monospace';
+      octx.fillText(maxVal.toFixed(2), w - 40, y + rowH / 2 + 3);
+    }
+
+    // Punto luminoso de la señal
+    if (p < 1) {
+      const y = rowH * .25 + (h - rowH * .5) * p;
+      const r = 5 + 3 * Math.sin(p * Math.PI);
+      octx.beginPath();
+      octx.fillStyle = 'rgba(34,211,238,.95)';
+      octx.shadowColor = '#22d3ee';
+      octx.shadowBlur = 18;
+      octx.arc(20, y, r, 0, Math.PI * 2);
+      octx.fill();
+      octx.shadowBlur = 0;
+    }
+  }
+
+  function drawHeatmap(now) {
+    const w = heatmap.width, h = heatmap.height;
+    hctx.clearRect(0, 0, w, h);
+    const key = `layer_${selectedLayer}`;
+    const t = animT();
+    const n = META.neurons_per_layer;
+
+    for (let i = 0; i < n; i++) {
+      const cx = i % COLS;
+      const cy = (i / COLS) | 0;
+      hctx.fillStyle = colorFor(lerpVal(key, i, t));
+      hctx.fillRect(cx * CELL, cy * CELL, CELL - 1, CELL - 1);
+    }
+
+    // Glow sobre las neuronas más activas
     const top = topkData[key] || [];
-    let maxVal = 0;
-    for (let k = 0; k < META.top_k; k++) {
-      const x = labelW + k * (cellW + cellGap);
-      const item = top[k];
-      const v = item ? item[1] : 0;
-      if (item) maxVal = Math.max(maxVal, v);
-      octx.fillStyle = item ? colorFor(v) : '#0b1220';
-      octx.fillRect(x, y + 5, cellW, rowH - 10);
+    hctx.save();
+    hctx.globalCompositeOperation = 'lighter';
+    for (const [idx, v] of top) {
+      if (v <= 0) continue;
+      const cx = idx % COLS, cy = (idx / COLS) | 0;
+      hctx.globalAlpha = clamp(v / (scaleMax || 1), 0, 1) * 0.5;
+      hctx.drawImage(glowSprite, cx * CELL - CELL, cy * CELL - CELL, CELL * 3, CELL * 3);
     }
-    octx.fillStyle = '#475569';
-    octx.font = '10px monospace';
-    octx.fillText(maxVal.toFixed(2), overview.width - 42, y + rowH / 2 + 3);
+    hctx.restore();
+
+    // Anillo de la neurona seleccionada
+    if (selectedNeuron !== null && selectedNeuron < n) {
+      const cx = selectedNeuron % COLS, cy = (selectedNeuron / COLS) | 0;
+      hctx.strokeStyle = '#a5f3fc';
+      hctx.lineWidth = 2;
+      hctx.strokeRect(cx * CELL - 1.5, cy * CELL - 1.5, CELL + 1, CELL + 1);
+    }
+
+    // Barrido al recibir un token
+    const sp = REDUCED ? 1 : clamp((now - anim.start) / 620);
+    if (sp < 1) {
+      const x = sp * w;
+      const g = hctx.createLinearGradient(x - 40, 0, x + 40, 0);
+      g.addColorStop(0, 'rgba(34,211,238,0)');
+      g.addColorStop(.5, 'rgba(34,211,238,.16)');
+      g.addColorStop(1, 'rgba(34,211,238,0)');
+      hctx.fillStyle = g;
+      hctx.fillRect(x - 40, 0, 80, h);
+    }
   }
-}
 
-function drawHeatmap() {
-  const key = `layer_${selectedLayer}`;
-  hctx.clearRect(0, 0, heatmap.width, heatmap.height);
-  for (let i = 0; i < META.neurons_per_layer; i++) {
-    const cx = i % COLS;
-    const cy = Math.floor(i / COLS);
-    hctx.fillStyle = colorFor(lerpVal(key, i));
-    hctx.fillRect(cx * CELL, cy * CELL, CELL - 1, CELL - 1);
+  /* =========================================================
+     Atención (conexiones reales)
+     ========================================================= */
+  function truncText(s, n) {
+    const t = (s || '').trim() || '␣';
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
   }
-}
 
-function renderTopk() {
-  const key = `layer_${selectedLayer}`;
-  const items = topkData[key] || [];
-  topkEl.innerHTML = items.map(([idx, v]) =>
-    `<div><span class="idx">neurona ${idx}</span><span class="val">${v.toFixed(3)}</span></div>`
-  ).join('');
-}
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
 
-function frame() {
-  if (anim.t < 1) {
-    anim.t = Math.min(1, anim.t + 0.07);
-    drawOverview();
-    drawHeatmap();
+  function setAttnAvailability(ok) {
+    attnEmpty.hidden = ok;
+    attnGrid.style.display = ok ? '' : 'none';
+    if (!ok) {
+      attnFanCtx.clearRect(0, 0, attnFan.width, attnFan.height);
+      attnMapCtx.clearRect(0, 0, attnMap.width, attnMap.height);
+    }
+  }
+
+  function renderAttnHeads() {
+    if (!attnMeta.available || !attnMeta.heads) {
+      attnHeadsEl.innerHTML = '';
+      return;
+    }
+    if (attnHeadsEl.childElementCount !== attnMeta.heads) {
+      attnHeadsEl.innerHTML = Array.from({ length: attnMeta.heads },
+        (_, h) => `<button data-head="${h}">c${h}</button>`).join('');
+    }
+    [...attnHeadsEl.children].forEach((b, h) => b.classList.toggle('sel', h === attnHead));
+  }
+
+  function drawAttnMap(heads) {
+    const ctx = attnMapCtx;
+    const w = attnMap.width, h = attnMap.height;
+    ctx.clearRect(0, 0, w, h);
+    const tokens = attnData.tokens;
+    const n = tokens.length;
+    const H = heads.length;
+    if (!n || !H) { attnGeom = null; return; }
+
+    const labelW = 30, topPad = 4, bottomPad = 18;
+    const rowH = (h - topPad - bottomPad) / H;
+    const colW = (w - labelW - 6) / n;
+    attnGeom = { labelW, topPad, rowH, colW, n, H };
+
+    if (attnHead < H) {
+      ctx.fillStyle = 'rgba(139,92,246,.10)';
+      ctx.fillRect(0, topPad + attnHead * rowH, w, rowH);
+    }
+
+    for (let head = 0; head < H; head++) {
+      const y = topPad + head * rowH;
+      ctx.fillStyle = head === attnHead ? '#c4b5fd' : '#64748b';
+      ctx.font = '600 9px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`c${head}`, 4, y + rowH / 2 + 3);
+
+      for (const [pos, weight] of heads[head]) {
+        if (pos < 0 || pos >= n) continue;
+        ctx.fillStyle = attnColor(weight);
+        const cw = Math.max(1, colW - 1);
+        const ch = Math.max(1, rowH - 1.5);
+        ctx.fillRect(labelW + pos * colW, y + .75, cw, ch);
+      }
+    }
+
+    // Columna de la query (último token del contexto)
+    const qx = labelW + (n - 1) * colW + colW / 2;
+    ctx.strokeStyle = 'rgba(34,211,238,.55)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(qx, topPad);
+    ctx.lineTo(qx, h - bottomPad);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '9px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#475569';
+    ctx.fillText('tokens →', labelW, h - 5);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#67e8f9';
+    ctx.fillText('query', w - 6, h - 5);
+  }
+
+  function drawAttnFan(heads, headIdx) {
+    const ctx = attnFanCtx;
+    const w = attnFan.width, h = attnFan.height;
+    ctx.clearRect(0, 0, w, h);
+    const tokens = attnData.tokens;
+    const pairs = (heads[headIdx] || []).slice(0, attnMeta.top_k || 8);
+    if (!tokens.length || !pairs.length) return;
+
+    const n = pairs.length;
+    const pad = 10;
+    const slot = (w - pad * 2) / n;
+    const maxChars = Math.max(4, Math.floor((slot - 16) / 6.5));
+    const queryIdx = tokens.length - 1;
+    const queryText = truncText(tokens[queryIdx], Math.max(8, maxChars + 4));
+    const cx = w / 2;
+    const centerY = h - 36;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(148,163,184,.75)';
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.fillText('TOKEN QUE PREDICE', cx, 13);
+
+    pairs.forEach(([pos, weight], i) => {
+      const x = pad + slot * i + slot / 2;
+      const y = 30;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y + 20);
+      ctx.quadraticCurveTo(x, centerY - 26, cx, centerY);
+      ctx.strokeStyle = '#a78bfa';
+      ctx.globalAlpha = 0.25 + clamp(weight) * 0.7;
+      ctx.lineWidth = 1 + clamp(weight) * 6;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      const text = truncText(tokens[pos], maxChars);
+      ctx.font = '600 11px ui-monospace, monospace';
+      const tw = ctx.measureText(text).width;
+      const bw = Math.min(slot - 6, Math.max(42, tw + 20));
+      ctx.fillStyle = 'rgba(139,92,246,.14)';
+      ctx.strokeStyle = 'rgba(167,139,250,.45)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, x - bw / 2, y, bw, 20, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ddd6fe';
+      ctx.fillText(text, x, y + 14);
+
+      ctx.fillStyle = '#a78bfa';
+      ctx.font = '600 10px ui-monospace, monospace';
+      ctx.fillText(`${(weight * 100).toFixed(1)}%`, x, y + 34);
+    });
+
+    const centerW = Math.min(240, Math.max(100, queryText.length * 7.5 + 28));
+    ctx.fillStyle = 'rgba(34,211,238,.16)';
+    ctx.strokeStyle = 'rgba(34,211,238,.7)';
+    ctx.lineWidth = 1.2;
+    roundRect(ctx, cx - centerW / 2, centerY, centerW, 26, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#a5f3fc';
+    ctx.font = '600 12px ui-monospace, monospace';
+    ctx.fillText(queryText, cx, centerY + 17);
+  }
+
+  function drawAttention() {
+    attnLayerEl.textContent = selectedLayer;
+    if (!attnMeta.available) return;
+    const layer = attnData.layers && attnData.layers[`layer_${selectedLayer}`];
+    if (!layer || !layer.length) {
+      attnGeom = null;
+      attnMapCtx.clearRect(0, 0, attnMap.width, attnMap.height);
+      attnFanCtx.clearRect(0, 0, attnFan.width, attnFan.height);
+      return;
+    }
+    const head = Math.min(attnHead, layer.length - 1);
+    drawAttnMap(layer);
+    drawAttnFan(layer, head);
+  }
+
+  function frame(now) {
+    if (needsDraw || now - anim.start < 1000) {
+      drawOverview(now);
+      drawHeatmap(now);
+      drawAttention();
+      needsDraw = false;
+    }
+    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
 
-overview.addEventListener('click', (e) => {
-  const rowH = overview.height / META.layers;
-  const l = Math.floor((e.clientY - overview.getBoundingClientRect().top) / rowH);
-  if (l >= 0 && l < META.layers) {
-    selectedLayer = l;
-    document.getElementById('heatmap-title').textContent =
-      `Heatmap · Capa ${l} (${META.neurons_per_layer} neuronas)`;
+  /* =========================================================
+     Ranking, detalle y sparkline
+     ========================================================= */
+  function renderTopk() {
+    const key = `layer_${selectedLayer}`;
+    const items = topkData[key] || [];
+    const max = items.length ? Math.max(...items.map((x) => Math.abs(x[1])), 1e-6) : 1;
+    topkLayer.textContent = `capa ${selectedLayer}`;
+    topkEl.innerHTML = items.map(([idx, v]) => {
+      const width = Math.max(2, Math.round(Math.abs(v) / max * 100));
+      const sel = idx === selectedNeuron ? ' sel' : '';
+      return `<button class="topk-row${sel}" data-neuron="${idx}">
+        <span class="idx">#${idx}</span>
+        <span class="bar"><i style="width:${width}%"></i></span>
+        <span class="val">${v.toFixed(3)}</span>
+      </button>`;
+    }).join('');
+  }
+
+  function selectNeuron(i) {
+    selectedNeuron = i;
+    spark = [];
+    const key = `layer_${selectedLayer}`;
+    spark.push((curr[key] && curr[key][i]) || 0);
     renderTopk();
-    drawOverview();
-    drawHeatmap();
+    updateDetail();
+    needsDraw = true;
   }
-});
 
-heatmap.addEventListener('mousemove', (e) => {
-  const r = heatmap.getBoundingClientRect();
-  const cx = Math.floor((e.clientX - r.left) / CELL);
-  const cy = Math.floor((e.clientY - r.top) / CELL);
-  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) { tooltip.style.display = 'none'; return; }
-  const i = cy * COLS + cx;
-  if (i >= META.neurons_per_layer) { tooltip.style.display = 'none'; return; }
-  const v = lerpVal(`layer_${selectedLayer}`, i);
-  tooltip.style.display = 'block';
-  tooltip.style.left = `${e.clientX + 14}px`;
-  tooltip.style.top = `${e.clientY + 14}px`;
-  tooltip.textContent = `capa ${selectedLayer} · neurona ${i} · ${v.toFixed(3)}`;
-});
-heatmap.addEventListener('mouseleave', () => tooltip.style.display = 'none');
-
-function applyStep(data) {
-  prev = curr;
-  curr = {};
-  for (const [key, values] of Object.entries(data.activations)) {
-    curr[key] = values;
-  }
-  topkData = data.top;
-
-  let maxAbs = 1e-6;
-  for (const values of Object.values(data.activations)) {
-    for (const v of values) {
-      const a = Math.abs(v);
-      if (a > maxAbs) maxAbs = a;
+  function updateDetail() {
+    if (selectedNeuron === null) {
+      detailEmpty.hidden = false;
+      detailBody.hidden = true;
+      return;
     }
+    detailEmpty.hidden = true;
+    detailBody.hidden = false;
+    const key = `layer_${selectedLayer}`;
+    const v = (curr[key] && curr[key][selectedNeuron]) || 0;
+    dNeuron.textContent = selectedNeuron;
+    dValue.textContent = v.toFixed(3);
+    const rank = (topkData[key] || []).findIndex((x) => x[0] === selectedNeuron);
+    dRank.textContent = rank >= 0 ? `#${rank + 1} de la capa` : 'fuera del Top-16';
+    drawSpark();
   }
-  scaleMax = maxAbs;
-  scaleMaxEl.textContent = maxAbs.toFixed(2);
 
-  anim.t = 0;
-  streamEl.textContent += data.token;
-  renderTopk();
-}
+  function drawSpark() {
+    const w = sparkCanvas.width, h = sparkCanvas.height;
+    sparkCtx.clearRect(0, 0, w, h);
+    const mid = h / 2;
 
-let ws;
-let reconnectTimer;
-function connect() {
-  ws = new WebSocket(`ws://${location.host || 'localhost:8000'}/ws`);
-  ws.onopen = () => {
-    statusEl.textContent = 'Conectado. Escribe un prompt y pulsa Generar.';
-    sendBtn.disabled = false;
-  };
-  ws.onclose = () => {
-    statusEl.textContent = 'Desconectado. Reintentando...';
-    sendBtn.disabled = true;
-    clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, 2000);
-  };
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === 'meta') {
-      META = { ...META, ...data };
-      if (data.neurons_per_layer) {
-        selectedLayer = Math.min(selectedLayer, META.layers - 1);
-        resizeHeatmap();
-        document.getElementById('heatmap-title').textContent =
-          `Heatmap · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+    sparkCtx.strokeStyle = 'rgba(148,163,184,.18)';
+    sparkCtx.beginPath();
+    sparkCtx.moveTo(0, mid);
+    sparkCtx.lineTo(w, mid);
+    sparkCtx.stroke();
+
+    if (!spark.length) return;
+    const max = Math.max(...spark.map(Math.abs), 1e-6);
+    const pts = spark.map((v, i) => [
+      spark.length === 1 ? w : (i / (spark.length - 1)) * w,
+      mid - (v / max) * (mid - 5)
+    ]);
+
+    sparkCtx.beginPath();
+    sparkCtx.moveTo(pts[0][0], mid);
+    for (const [x, y] of pts) sparkCtx.lineTo(x, y);
+    sparkCtx.lineTo(pts[pts.length - 1][0], mid);
+    sparkCtx.closePath();
+    const g = sparkCtx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(34,211,238,.35)');
+    g.addColorStop(1, 'rgba(34,211,238,0)');
+    sparkCtx.fillStyle = g;
+    sparkCtx.fill();
+
+    sparkCtx.beginPath();
+    pts.forEach(([x, y], i) => (i ? sparkCtx.lineTo(x, y) : sparkCtx.moveTo(x, y)));
+    sparkCtx.strokeStyle = '#67e8f9';
+    sparkCtx.lineWidth = 2;
+    sparkCtx.lineJoin = 'round';
+    sparkCtx.stroke();
+
+    const [lx, ly] = pts[pts.length - 1];
+    sparkCtx.beginPath();
+    sparkCtx.arc(lx, ly, 3, 0, Math.PI * 2);
+    sparkCtx.fillStyle = '#a5f3fc';
+    sparkCtx.fill();
+  }
+
+  /* =========================================================
+     Eventos de selección
+     ========================================================= */
+  overview.addEventListener('click', (e) => {
+    const r = overview.getBoundingClientRect();
+    const rowH = overview.height / META.layers;
+    const y = (e.clientY - r.top) * (overview.height / r.height);
+    const l = Math.floor(y / rowH);
+    if (l >= 0 && l < META.layers) {
+      selectedLayer = l;
+      selectedNeuron = null;
+      spark = [];
+      document.getElementById('heatmap-title').textContent =
+        `Mapa de neuronas · Capa ${l} (${META.neurons_per_layer} neuronas)`;
+      renderTopk();
+      updateDetail();
+      needsDraw = true;
+    }
+  });
+
+  heatmap.addEventListener('mousemove', (e) => {
+    const r = heatmap.getBoundingClientRect();
+    const cx = Math.floor((e.clientX - r.left) * (heatmap.width / r.width) / CELL);
+    const cy = Math.floor((e.clientY - r.top) * (heatmap.height / r.height) / CELL);
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    const i = cy * COLS + cx;
+    if (i >= META.neurons_per_layer) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    const v = lerpVal(`layer_${selectedLayer}`, i, animT());
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${e.clientX + 14}px`;
+    tooltip.style.top = `${e.clientY + 14}px`;
+    tooltip.textContent = `capa ${selectedLayer} · neurona ${i} · ${v.toFixed(3)}`;
+  });
+  heatmap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  heatmap.addEventListener('click', (e) => {
+    const r = heatmap.getBoundingClientRect();
+    const cx = Math.floor((e.clientX - r.left) * (heatmap.width / r.width) / CELL);
+    const cy = Math.floor((e.clientY - r.top) * (heatmap.height / r.height) / CELL);
+    const i = cy * COLS + cx;
+    if (cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS && i < META.neurons_per_layer) {
+      selectNeuron(i);
+    }
+  });
+
+  topkEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-neuron]');
+    if (btn) selectNeuron(parseInt(btn.dataset.neuron, 10));
+  });
+
+  attnHeadsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-head]');
+    if (!btn) return;
+    attnHead = parseInt(btn.dataset.head, 10);
+    renderAttnHeads();
+    needsDraw = true;
+  });
+
+  attnMap.addEventListener('mousemove', (e) => {
+    if (!attnMeta.available || !attnGeom) { tooltip.style.display = 'none'; return; }
+    const r = attnMap.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (attnMap.width / r.width);
+    const y = (e.clientY - r.top) * (attnMap.height / r.height);
+    const { labelW, topPad, rowH, colW, n, H } = attnGeom;
+    const head = Math.floor((y - topPad) / rowH);
+    const pos = Math.floor((x - labelW) / colW);
+    if (head < 0 || head >= H || pos < 0 || pos >= n) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    const layer = attnData.layers[`layer_${selectedLayer}`] || [];
+    const pair = (layer[head] || []).find(([p]) => p === pos);
+    const tok = truncText(attnData.tokens[pos], 26);
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${e.clientX + 14}px`;
+    tooltip.style.top = `${e.clientY + 14}px`;
+    tooltip.textContent = `capa ${selectedLayer} · cabeza ${head} · «${tok}» · ` +
+      (pair ? `${(pair[1] * 100).toFixed(1)}%` : `fuera del top-${attnMeta.top_k || 8}`);
+  });
+  attnMap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  attnMap.addEventListener('click', (e) => {
+    if (!attnGeom) return;
+    const r = attnMap.getBoundingClientRect();
+    const y = (e.clientY - r.top) * (attnMap.height / r.height);
+    const head = Math.floor((y - attnGeom.topPad) / attnGeom.rowH);
+    if (head >= 0 && head < attnGeom.H) {
+      attnHead = head;
+      renderAttnHeads();
+      needsDraw = true;
+    }
+  });
+
+  /* =========================================================
+     Flujo de tokens
+     ========================================================= */
+  function appendToken(text) {
+    const span = document.createElement('span');
+    span.className = 'tok';
+    span.textContent = text;
+    streamEl.appendChild(span);
+    if (streamEl.childElementCount > 400) streamEl.firstElementChild.remove();
+  }
+
+  /* =========================================================
+     Informe de la generación
+     ========================================================= */
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function renderReport() {
+    if (!report.prompt && !report.tokens) {
+      reportEl.innerHTML =
+        '<p class="muted">Pulsa <b>Generar</b> y aquí aparecerá un informe en lenguaje claro con lo que ocurrió por dentro.</p>';
+      return;
+    }
+    const r = report;
+    const parts = [];
+
+    parts.push(
+      `<p>El modelo <b>${escapeHtml(r.modelLabel || '—')}</b> recibió el prompt ` +
+      `<b>«${escapeHtml(r.prompt)}»</b> y generó <b>${r.tokens}</b> tokens. ` +
+      `En cada token hizo una pasada completa por sus <b>${r.layers}</b> capas, ` +
+      `y cada capa tiene <b>${r.neurons}</b> neuronas MLP.</p>`
+    );
+
+    parts.push(
+      `<p><b>El proceso, en simple:</b> el prompt se parte en <b>tokens</b>; cada token se convierte ` +
+      `en números y atraviesa las capas. En cada capa, la <b>atención</b> decide qué tokens anteriores ` +
+      `son relevantes y la <b>MLP</b> transforma la información con sus neuronas. Al final, el modelo ` +
+      `elige el siguiente token y repite el ciclo. Por eso ves una pasada completa por cada token generado.</p>`
+    );
+
+    if (r.maxAct.value > -Infinity) {
+      parts.push(
+        `<p>La <b>activación más intensa</b> apareció en la <b>capa ${r.maxAct.layer}</b>, ` +
+        `<b>neurona #${r.maxAct.neuron}</b>, con un valor de <b>${r.maxAct.value.toFixed(3)}</b>, ` +
+        `en la pasada que generó <b>«${escapeHtml(r.maxAct.token)}»</b>. ` +
+        `La capa que se encendió más en promedio fue la <b>capa ${r.maxLayerMean.layer}</b> ` +
+        `(media ${r.maxLayerMean.value.toFixed(3)}).</p>`
+      );
+    }
+
+    if (r.strongestAttn.weight > -Infinity) {
+      const a = r.strongestAttn;
+      parts.push(
+        `<p>En <b>atención</b>, la conexión más fuerte la hizo la <b>cabeza c${a.head}</b> de la ` +
+        `<b>capa ${a.layer}</b>: miró el token <b>«${escapeHtml(a.token)}»</b> con un peso de ` +
+        `<b>${(a.weight * 100).toFixed(1)}%</b> al predecir <b>«${escapeHtml(a.predicted)}»</b>.</p>`
+      );
+    }
+
+    if (r.sampling) {
+      const modeText = r.sampling.mode === 'greedy'
+        ? 'siempre el token más probable (<b>greedy</b>)'
+        : 'al azar entre candidatos, según su probabilidad (<b>muestreo</b>)';
+      parts.push(
+        `<p>El siguiente token se eligió ${modeText}, con <b>temperature ${r.sampling.temperature}</b>, ` +
+        `<b>top-k ${r.sampling.top_k}</b> y penalización por repetición <b>${r.sampling.repetition_penalty}</b>. ` +
+        `Por eso dos ejecuciones pueden dar textos distintos.</p>`
+      );
+    }
+
+    if (r.stopped === 'limit') {
+      parts.push(
+        `<p class="report-note">La generación se detuvo porque se alcanzó el límite de ` +
+        `<b>${r.requested}</b> tokens (el texto puede quedar cortado a mitad de palabra). ` +
+        `Sube el número en «Tokens» —máximo 100— para respuestas más largas.</p>`
+      );
+    } else if (r.stopped === 'eos') {
+      parts.push(
+        `<p class="report-note">La generación terminó porque el modelo emitió su token de fin (EOS).</p>`
+      );
+    }
+
+    const sampling = r.sampling
+      ? `${r.sampling.mode === 'greedy' ? 'greedy' : 'muestreo'} · T=${r.sampling.temperature} · top-k=${r.sampling.top_k} · rep=${r.sampling.repetition_penalty}`
+      : '—';
+    const elapsed = r.elapsed ? `${r.elapsed.toFixed(1)} s` : (r.tokens ? 'en curso…' : '—');
+
+    parts.push(
+      `<div class="report-grid">` +
+      `<div class="stat"><div class="k">Tokens generados</div><div class="v">${r.tokens} / ${r.requested || '—'}</div></div>` +
+      `<div class="stat"><div class="k">Capa más activa</div><div class="v">capa ${r.maxLayerMean.layer} · media ${r.maxLayerMean.value > -Infinity ? r.maxLayerMean.value.toFixed(2) : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Neurona récord</div><div class="v">${r.maxAct.value > -Infinity ? `capa ${r.maxAct.layer} · #${r.maxAct.neuron} · ${r.maxAct.value.toFixed(2)}` : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Atención récord</div><div class="v">${r.strongestAttn.weight > -Infinity ? `capa ${r.strongestAttn.layer} · c${r.strongestAttn.head} · ${(r.strongestAttn.weight * 100).toFixed(1)}%` : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Muestreo</div><div class="v">${escapeHtml(sampling)}</div></div>` +
+      `<div class="stat"><div class="k">Tiempo de generación</div><div class="v">${elapsed}</div></div>` +
+      `</div>`
+    );
+
+    parts.push(
+      `<div class="report-glossary">` +
+      `<div><b>Prompt</b>: el texto de entrada que le das al modelo.</div>` +
+      `<div><b>Token</b>: pieza mínima de texto (palabra, trozo o signo).</div>` +
+      `<div><b>Capa</b>: etapa de procesamiento; la información pasa por ellas en orden.</div>` +
+      `<div><b>Neurona MLP</b>: unidad que transforma la información dentro de una capa.</div>` +
+      `<div><b>Activación</b>: número que indica cuánto se enciende una neurona (puede ser negativo).</div>` +
+      `<div><b>Atención</b>: mecanismo que decide a qué tokens anteriores mirar.</div>` +
+      `<div><b>Cabeza</b>: canal de atención independiente dentro de una capa.</div>` +
+      `<div><b>Temperature</b>: cuánto azar introduce el muestreo (más alta = más variado).</div>` +
+      `<div><b>Top-k</b>: limita la elección a los k tokens más probables.</div>` +
+      `<div><b>EOS</b>: token especial que marca el final de la generación.</div>` +
+      `</div>`
+    );
+
+    reportEl.innerHTML = parts.join('');
+  }
+
+  function applyStep(data) {
+    prev = curr;
+    curr = {};
+    for (const [key, values] of Object.entries(data.activations)) curr[key] = values;
+    topkData = data.top || {};
+    if (data.attention) attnData = data.attention;
+
+    let maxAbs = 1e-6;
+    let bestAct = { value: -Infinity, layer: 0, neuron: 0 };
+    let bestLayer = { value: -Infinity, layer: 0 };
+    for (const [key, values] of Object.entries(data.activations)) {
+      const layerIdx = parseInt(key.slice(6), 10);
+      let sum = 0;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        const a = Math.abs(v);
+        sum += a;
+        if (a > maxAbs) maxAbs = a;
+        if (v > bestAct.value) bestAct = { value: v, layer: layerIdx, neuron: i };
       }
-      promptEcho.textContent = data.chat ? '' : data.prompt;
-      streamEl.textContent = '';
-      statusEl.textContent =
-        `${data.model_label} · ${META.layers} capas × ${META.neurons_per_layer} neuronas · hooks en ${data.module_path}`;
-    } else if (data.type === 'step') {
-      applyStep(data);
-    } else if (data.type === 'done') {
-      running = false;
-      sendBtn.disabled = false;
-      statusEl.textContent = 'Generación terminada.';
+      const mean = values.length ? sum / values.length : 0;
+      if (mean > bestLayer.value) bestLayer = { value: mean, layer: layerIdx };
     }
-  };
-}
-connect();
+    scaleMax = maxAbs;
+    scaleMaxEl.textContent = maxAbs.toFixed(2);
 
-function numberOr(input, fallback) {
-  const v = parseFloat(input.value);
-  return Number.isFinite(v) ? v : fallback;
-}
+    // Informe: acumulamos los récords de toda la generación.
+    if (!report.firstStepAt) report.firstStepAt = performance.now();
+    report.tokens = tokenCount + 1;
+    if (bestAct.value > report.maxAct.value) report.maxAct = { ...bestAct, token: data.token };
+    if (bestLayer.value > report.maxLayerMean.value) {
+      report.maxLayerMean = { ...bestLayer, token: data.token };
+    }
+    if (data.attention && data.attention.layers) {
+      const toks = data.attention.tokens || [];
+      let best = report.strongestAttn;
+      for (const [lkey, heads] of Object.entries(data.attention.layers)) {
+        const layerIdx = parseInt(lkey.slice(6), 10);
+        heads.forEach((pairs, h) => {
+          for (const [pos, w] of pairs) {
+            if (w > best.weight) {
+              best = {
+                weight: w, layer: layerIdx, head: h, pos,
+                token: (toks[pos] || '').trim() || '␣', predicted: data.token,
+              };
+            }
+          }
+        });
+      }
+      report.strongestAttn = best;
+    }
 
-function send() {
-  if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
-  running = true;
-  sendBtn.disabled = true;
-  const prompt = promptInput.value.trim() || 'Hola';
-  const tokens = Math.max(1, Math.min(100, parseInt(tokensInput.value || '40', 10)));
-  promptEcho.textContent = '';
-  streamEl.textContent = '';
-  ws.send(JSON.stringify({
-    prompt,
-    tokens,
-    model: modelSelect.value,
-    params: {
+    anim.start = performance.now();
+    needsDraw = true;
+    tokenCount++;
+    chipToken.textContent = `token ${tokenCount}`;
+    appendToken(data.token);
+
+    const key = `layer_${selectedLayer}`;
+    if (selectedNeuron !== null) {
+      spark.push((curr[key] && curr[key][selectedNeuron]) || 0);
+      if (spark.length > 90) spark.shift();
+    }
+
+    renderTopk();
+    updateDetail();
+    renderReport();
+  }
+
+  /* =========================================================
+     WebSocket
+     ========================================================= */
+  let ws;
+  let reconnectTimer;
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host || 'localhost:8000'}/ws`);
+    ws.onopen = () => {
+      statusEl.textContent = 'Conectado. Escribe un prompt y pulsa Generar.';
+      setBadge('idle', 'sin cargar');
+      sendBtn.disabled = false;
+    };
+    ws.onclose = () => {
+      statusEl.textContent = 'Desconectado. Reintentando…';
+      setBadge('error', 'desconectado');
+      sendBtn.disabled = true;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'loading') {
+        setBadge('loading', `cargando ${data.model}`);
+        statusEl.textContent =
+          `Cargando ${data.label}… la primera vez descarga los pesos y puede tardar varios minutos.`;
+        return;
+      }
+
+      if (data.type === 'meta') {
+        META = { ...META, ...data };
+        if (data.neurons_per_layer) {
+          selectedLayer = Math.min(selectedLayer, META.layers - 1);
+          resizeHeatmap();
+          document.getElementById('heatmap-title').textContent =
+            `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+        }
+        selectedNeuron = null;
+        spark = [];
+        tokenCount = 0;
+        chipToken.textContent = 'token 0';
+        chipModel.textContent = data.model_label;
+        chipLayers.textContent = `${META.layers} capas`;
+        chipNeurons.textContent = `${META.neurons_per_layer} neuronas/capa`;
+        attnMeta = data.attention || { available: false, heads: 0, top_k: 8 };
+        attnHead = 0;
+        attnData = { tokens: [], layers: {} };
+        setAttnAvailability(attnMeta.available);
+        renderAttnHeads();
+        report.modelLabel = data.model_label;
+        report.layers = META.layers;
+        report.neurons = META.neurons_per_layer;
+        renderReport();
+        streamEl.innerHTML = '';
+        promptEcho.textContent = data.chat ? '' : data.prompt;
+        setBadge('ready', 'listo');
+        statusEl.textContent =
+          `Modelo listo · ${data.model_label} · ${META.layers} capas × ${META.neurons_per_layer} neuronas · generando…`;
+        renderTopk();
+        updateDetail();
+        needsDraw = true;
+        return;
+      }
+
+      if (data.type === 'step') {
+        applyStep(data);
+        return;
+      }
+
+      if (data.type === 'done') {
+        running = false;
+        sendBtn.disabled = false;
+        caret.style.display = 'none';
+        report.stopped = data.stopped || '';
+        if (typeof data.tokens === 'number') report.tokens = data.tokens;
+        report.elapsed = report.firstStepAt
+          ? (performance.now() - report.firstStepAt) / 1000
+          : 0;
+        renderReport();
+        statusEl.textContent = data.stopped === 'limit'
+          ? `Generación terminada: se alcanzó el límite de ${report.requested} tokens.`
+          : (data.stopped === 'eos'
+            ? 'Generación terminada: el modelo emitió EOS.'
+            : 'Generación terminada.');
+      }
+    };
+  }
+  connect();
+
+  /* =========================================================
+     Envío
+     ========================================================= */
+  function numberOr(input, fallback) {
+    const v = parseFloat(input.value);
+    return Number.isFinite(v) ? v : fallback;
+  }
+
+  function send() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
+    running = true;
+    sendBtn.disabled = true;
+    setBadge('loading', 'generando…');
+    statusEl.textContent = 'Generando… si el modelo no estaba cargado, la primera vez puede tardar varios minutos.';
+    caret.style.display = 'inline-block';
+
+    const prompt = promptInput.value.trim() || 'Hola';
+    const tokens = Math.max(1, Math.min(100, parseInt(tokensInput.value || '40', 10)));
+    const params = {
       mode: modeSelect.value,
       temperature: numberOr(temperatureInput, 0.8),
       top_k: numberOr(topKInput, 40),
       repetition_penalty: numberOr(repPenaltyInput, 1.15),
       no_repeat_ngram: 0
-    }
-  }));
-}
-sendBtn.addEventListener('click', send);
-promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    };
+    promptEcho.textContent = '';
+    streamEl.innerHTML = '';
+    tokenCount = 0;
+    chipToken.textContent = 'token 0';
+    attnData = { tokens: [], layers: {} };
+    attnGeom = null;
+    report = emptyReport();
+    report.prompt = prompt;
+    report.requested = tokens;
+    report.startedAt = performance.now();
+    report.sampling = params;
+    renderReport();
 
-fetch('/models').then(r => r.json()).then(data => {
-  modelSelect.innerHTML = data.models
-    .map(m => `<option value="${m.key}"${m.key === data.default ? ' selected' : ''}>${m.label}</option>`)
-    .join('');
-}).catch(() => {
-  modelSelect.innerHTML = '<option value="gpt2">GPT-2 base (124M)</option>';
-});
+    ws.send(JSON.stringify({ prompt, tokens, model: modelSelect.value, params }));
+  }
+
+  copyReportBtn.addEventListener('click', async () => {
+    const text = reportEl.innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyReportBtn.textContent = 'Copiado ✓';
+    } catch (e) {
+      copyReportBtn.textContent = 'No se pudo';
+    }
+    setTimeout(() => { copyReportBtn.textContent = 'Copiar'; }, 1500);
+  });
+
+  sendBtn.addEventListener('click', send);
+  promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+  modelSelect.addEventListener('change', () => {
+    setBadge('idle', 'sin cargar');
+    statusEl.textContent = 'Modelo seleccionado: se cargará al pulsar Generar.';
+  });
+
+  /* =========================================================
+     Catálogo de modelos
+     ========================================================= */
+  fetch('/models').then((r) => r.json()).then((data) => {
+    modelSelect.innerHTML = data.models
+      .map((m) => `<option value="${m.key}"${m.key === data.default ? ' selected' : ''}>${m.label}</option>`)
+      .join('');
+  }).catch(() => {
+    modelSelect.innerHTML = '<option value="qwen2.5-0.5b-instruct">Qwen2.5-0.5B-Instruct</option>';
+  });
 </script>
 </body>
 </html>

@@ -11,13 +11,15 @@ No entrena ni modifica el modelo: solo *mira hacia dentro* con **TransformerLens
 ```
 prompt ──▶ server.py (FastAPI)
              │  1. carga el modelo con TransformerBridge.boot_transformers
-             │  2. por cada token: run_with_cache(blocks.{i}.mlp.hook_post)
+             │  2. por cada token: run_with_cache(mlp.hook_post + attn.hook_pattern)
              │  3. guarda la activación del ÚLTIMO token (d_mlp floats)
-             ▼  WebSocket /ws  →  {token, activations, top}
+             │  4. atención de la última query: top-8 conexiones por cabeza
+             ▼  WebSocket /ws  →  {token, activations, top, attention}
         index.html (canvas)
              │  overview: Top-16 neuronas por capa (clic para seleccionar capa)
              │  heatmap:  todas las neuronas de la capa seleccionada
-             └  top-k:   ranking de la capa seleccionada + stream de texto
+             │  atención: conexiones reales por cabeza + mapa de cabezas
+             └  top-k / detalle de neurona / stream de texto
 ```
 
 La neurona capturada es la **post-activación de la MLP** (antes de `down_proj`). En arquitecturas con
@@ -28,8 +30,8 @@ completa**, no solo la compuerta.
 
 | Clave | Modelo | Uso |
 |---|---|---|
-| `gpt2` (por defecto) | GPT-2 base (124M) | continúa texto |
-| `qwen2.5-0.5b-instruct` | Qwen2.5-0.5B-Instruct | responde preguntas (chat template) |
+| `qwen2.5-0.5b-instruct` (por defecto) | Qwen2.5-0.5B-Instruct | responde preguntas (chat template) |
+| `gpt2` | GPT-2 base (124M) | continúa texto |
 | `pythia-410m` | EleutherAI Pythia-410m | continúa texto |
 
 Se carga **un solo modelo en memoria** a la vez: al cambiar de modelo se descarga el anterior para no
@@ -38,7 +40,8 @@ agotar la RAM. La primera vez que se usa un modelo, Hugging Face lo descarga a l
 ## Requisitos
 
 - Python 3.10+ (el `Dockerfile` usa 3.14).
-- ~2 GB de RAM libres para GPT-2, ~1 GB de disco por modelo descargado.
+- ~2 GB de RAM libres (el modelo por defecto, Qwen2.5-0.5B, ocupa ~2 GB en `float32`; GPT-2 ~0,5 GB).
+- ~1 GB de disco por modelo descargado (Qwen ~1 GB, GPT-2 ~550 MB).
 - No requiere GPU (corre en CPU con `float32`).
 
 ## Instalación
@@ -77,6 +80,15 @@ docker compose down -v         # borra también los modelos
 4. Pulsa **Generar**.
 5. En el heatmap, **clic en una fila** del overview (izquierda) para seleccionar la capa mostrada;
    pasa el ratón por el heatmap para ver capa/neurona/valor exactos.
+6. Haz **clic en una neurona** del heatmap o del ranking para ver su valor, su posición y su
+   **historial de activación token a token**. El panel «¿Qué estoy viendo?» resume la interpretación.
+7. En el panel de **atención**, elige una cabeza (`c0`…`c13`) o haz clic en su fila del mapa para ver
+   sus conexiones más fuertes con los tokens anteriores.
+8. Al terminar, el **informe** explica en lenguaje claro qué pasó: capa y neurona récord, atención más
+   fuerte, muestreo usado y por qué terminó la generación (límite de tokens o EOS).
+
+Junto al botón **Generar** hay un badge con el estado del modelo: `sin cargar`, `cargando …`
+(descarga/carga los pesos la primera vez) y `listo`. El mensaje bajo los controles da el detalle.
 
 La escala de color es **global al paso** (0 → máximo absoluto del paso, mostrado bajo el heatmap), con
 los valores negativos en azul. La leyenda indica el valor `0` y el máximo.
@@ -87,7 +99,8 @@ los valores negativos en azul. La leyenda indica el valor `0` y el máximo.
 |---|---|---|
 | `GET` | `/` | sirve `index.html` |
 | `GET` | `/models` | catálogo de modelos disponibles (JSON) |
-| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params}` y emite `meta`, `step`, `done` |
+| `GET` | `/health` | sonda de liveness para Docker (`{"status": "ok"}`) |
+| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params}` y emite `meta`, `step` (activaciones, top y atención) y `done` (texto y motivo de parada) |
 
 ## Estructura
 
@@ -104,5 +117,7 @@ los valores negativos en azul. La leyenda indica el valor `0` y el máximo.
 - **Un cliente a la vez:** las activaciones viven en estado global; varias conexiones se pisan. Para
   concurrencia habría que aislar hooks por conexión.
 - **Escala global:** un valor atípico en una capa puede aplanar el resto (no hay normalización por capa).
-- Solo se visualiza la **MLP**; la atención y la ablación interactiva están en el roadmap
-  (ver `NEXT_STEPS.md`).
+- **Atención:** se envían las **8 conexiones más fuertes** por cabeza (no la matriz completa) para
+  mantener ligero el payload. La ablación interactiva sigue en el roadmap.
+- **Prompts largos:** el prompt se recorta a sus **últimos 512 tokens** para que los patrones de
+  atención no consuman demasiada RAM.

@@ -8,9 +8,14 @@ from transformer_lens.model_bridge import TransformerBridge
 from transformers import AutoTokenizer
 
 DEFAULT_PROMPT = "¿Qué cosas te puedo preguntar?"
+DEFAULT_MODEL = "qwen2.5-0.5b-instruct"
 DEFAULT_TOKENS = 40
 TOKEN_INTERVAL = 0.35
 TOP_K = 16
+TOP_ATTN = 8
+# Los patrones de atención son seq×seq por capa y cabeza; recortamos prompts largos
+# para que el caché temporal no consuma RAM de más.
+MAX_INPUT_TOKENS = 512
 
 # Cada modelo se carga bajo demanda y se descarga el anterior para no agotar la RAM.
 MODEL_REGISTRY = {
@@ -40,6 +45,7 @@ _current = {
     "labels": [],
     "neurons_per_layer": 0,
     "activations": {},
+    "attention": {"tokens": [], "layers": {}},
     "module_path": "",
 }
 
@@ -48,13 +54,19 @@ _current = {
 # la neurona completa, no solo la compuerta.
 MLP_NEURON_HOOK = "blocks.{i}.mlp.hook_post"
 
+# Atención post-softmax: [batch, n_heads, q, k]. Solo usamos la última query.
+ATTN_HOOK = "blocks.{i}.attn.hook_pattern"
+
 
 def load_model(key: str):
     if _current["key"] == key:
         return _current
 
     old_bridge = _current.get("bridge")
-    _current.update(key=None, bridge=None, tokenizer=None, activations={}, labels=[])
+    _current.update(
+        key=None, bridge=None, tokenizer=None, activations={}, labels=[],
+        attention={"tokens": [], "layers": {}},
+    )
     del old_bridge
     gc.collect()
 
@@ -77,6 +89,7 @@ def load_model(key: str):
         labels=[f"layer_{i}" for i in range(n_layers)],
         neurons_per_layer=neurons,
         activations={},
+        attention={"tokens": [], "layers": {}},
         module_path=MLP_NEURON_HOOK,
     )
     print(f"[listo] {spec['hf_id']}: {n_layers} capas x {neurons} neuronas ({MLP_NEURON_HOOK})", flush=True)
@@ -90,8 +103,13 @@ def build_input_ids(tokenizer, prompt: str, chat: bool):
             tokenize=False,
             add_generation_prompt=True,
         )
-        return tokenizer(text, return_tensors="pt").input_ids
-    return tokenizer(prompt, return_tensors="pt").input_ids
+        ids = tokenizer(text, return_tensors="pt").input_ids
+    else:
+        ids = tokenizer(prompt, return_tensors="pt").input_ids
+    # Conservamos el final (incluye el turno del asistente en modo chat).
+    if ids.shape[-1] > MAX_INPUT_TOKENS:
+        ids = ids[:, -MAX_INPUT_TOKENS:]
+    return ids
 
 
 def ban_repeated_ngrams(logits, ids: list[int], n: int):
@@ -140,22 +158,48 @@ def sample_next_token(logits, seen_ids: list[int], params: dict):
 
 def forward_once(ids: torch.Tensor):
     bridge = _current["bridge"]
+    tokenizer = _current["tokenizer"]
     activations = _current["activations"]
     with torch.no_grad():
         logits, cache = bridge.run_with_cache(
             ids,
-            names_filter=lambda name: name.endswith(".mlp.hook_post"),
+            names_filter=lambda name: name.endswith(".mlp.hook_post")
+            or name.endswith(".attn.hook_pattern"),
             return_cache_object=False,
         )
 
     # Solo guardamos el último token y una copia pequeña (lista de floats), para
     # que el caché completo de TransformerLens se libere al salir de la función.
-    for layer_idx in range(len(_current["labels"])):
+    n_layers = len(_current["labels"])
+    for layer_idx in range(n_layers):
         tensor = cache.get(MLP_NEURON_HOOK.format(i=layer_idx))
         if tensor is None:
             continue
         acts = tensor[0, -1, :].detach().float().cpu()
         activations[f"layer_{layer_idx}"] = [round(v, 3) for v in acts.tolist()]
+
+    # Atención real: de la última query a todas las claves. Guardamos solo el
+    # top-K por cabeza para que el payload sea ligero.
+    attn_layers = {}
+    for layer_idx in range(n_layers):
+        pattern = cache.get(ATTN_HOOK.format(i=layer_idx))
+        if pattern is None:
+            continue
+        last = pattern[0, :, -1, :].detach().float().cpu()   # [heads, seq]
+        k = min(TOP_ATTN, last.shape[-1])
+        vals, idxs = torch.topk(last, k, dim=-1)
+        heads = []
+        for h in range(last.shape[0]):
+            heads.append(
+                [
+                    [int(pos), round(float(w), 4)]
+                    for pos, w in zip(idxs[h].tolist(), vals[h].tolist())
+                ]
+            )
+        attn_layers[f"layer_{layer_idx}"] = heads
+
+    tokens = [tokenizer.decode([tid], skip_special_tokens=True) for tid in ids[0].tolist()]
+    _current["attention"] = {"tokens": tokens, "layers": attn_layers}
 
     return logits
 
@@ -168,9 +212,14 @@ async def index():
 @app.get("/models")
 async def models():
     return {
-        "default": "gpt2",
+        "default": DEFAULT_MODEL,
         "models": [{"key": k, "label": v["label"], "chat": v["chat"]} for k, v in MODEL_REGISTRY.items()],
     }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.websocket("/ws")
@@ -180,16 +229,27 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             msg = await websocket.receive_json()
             params = msg.get("params", {})
-            model_key = msg.get("model") or "gpt2"
+            model_key = msg.get("model") or DEFAULT_MODEL
             if model_key not in MODEL_REGISTRY:
-                model_key = "gpt2"
+                model_key = DEFAULT_MODEL
             prompt = (msg.get("prompt") or DEFAULT_PROMPT).strip() or DEFAULT_PROMPT
             n_tokens = max(1, min(int(msg.get("tokens", DEFAULT_TOKENS)), 100))
+
+            # Avisar al frontend ANTES de cargar: la primera vez descarga los
+            # pesos de Hugging Face y puede tardar varios minutos sin feedback.
+            spec = MODEL_REGISTRY[model_key]
+            if _current["key"] != model_key:
+                await websocket.send_json(
+                    {
+                        "type": "loading",
+                        "model": model_key,
+                        "label": spec["label"],
+                    }
+                )
 
             state = await asyncio.to_thread(load_model, model_key)
             tokenizer = state["tokenizer"]
             activations = state["activations"]
-            spec = MODEL_REGISTRY[model_key]
 
             curr_ids = build_input_ids(tokenizer, prompt, spec["chat"])
             seen_ids = curr_ids[0].tolist()
@@ -198,6 +258,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # el número real de neuronas antes de mandar el "meta" al frontend.
             await asyncio.to_thread(forward_once, curr_ids)
             neurons = len(next(iter(activations.values()))) if activations else state["neurons_per_layer"]
+            attn_state = state["attention"]
+            attn_heads = len(next(iter(attn_state["layers"].values()))) if attn_state["layers"] else 0
 
             await websocket.send_json(
                 {
@@ -210,17 +272,26 @@ async def websocket_endpoint(websocket: WebSocket):
                     "layers": len(state["labels"]),
                     "neurons_per_layer": neurons,
                     "top_k": TOP_K,
+                    "attention": {
+                        "available": bool(attn_state["layers"]),
+                        "heads": attn_heads,
+                        "top_k": TOP_ATTN,
+                    },
                 }
             )
 
+            generated = 0
+            stop_reason = "limit"
             for _ in range(n_tokens):
                 logits = await asyncio.to_thread(forward_once, curr_ids)
                 next_token_id = sample_next_token(logits[:, -1, :], seen_ids, params)
                 if next_token_id == tokenizer.eos_token_id:
+                    stop_reason = "eos"
                     break
                 token = tokenizer.decode(next_token_id, skip_special_tokens=True)
                 curr_ids = torch.cat([curr_ids, torch.tensor([[next_token_id]])], dim=-1)
                 seen_ids.append(next_token_id)
+                generated += 1
 
                 top_by_layer = {}
                 for key, values in activations.items():
@@ -233,10 +304,18 @@ async def websocket_endpoint(websocket: WebSocket):
                         "token": token,
                         "activations": activations.copy(),
                         "top": top_by_layer,
+                        "attention": state["attention"],
                     }
                 )
                 await asyncio.sleep(TOKEN_INTERVAL)
 
-            await websocket.send_json({"type": "done", "text": tokenizer.decode(seen_ids, skip_special_tokens=True)})
+            await websocket.send_json(
+                {
+                    "type": "done",
+                    "text": tokenizer.decode(seen_ids, skip_special_tokens=True),
+                    "stopped": stop_reason,
+                    "tokens": generated,
+                }
+            )
     except WebSocketDisconnect:
         return
