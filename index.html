@@ -7,12 +7,12 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: #060a12;
-    --panel: rgba(15, 23, 42, .72);
-    --border: rgba(148, 163, 184, .14);
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --dim: #64748b;
+    --bg: #0f1728;
+    --panel: rgba(24, 34, 54, .82);
+    --border: rgba(148, 163, 184, .18);
+    --text: #eef2ff;
+    --muted: #a5b4cf;
+    --dim: #7787a3;
     --accent: #22d3ee;
     --warm: #fbbf24;
     --green: #22c55e;
@@ -24,9 +24,9 @@
     margin: 0;
     padding: clamp(14px, 2vw, 28px);
     background:
-      radial-gradient(1200px 600px at 12% -10%, rgba(34, 211, 238, .13), transparent 60%),
-      radial-gradient(900px 500px at 92% 0%, rgba(168, 85, 247, .10), transparent 55%),
-      radial-gradient(1000px 700px at 50% 115%, rgba(34, 197, 94, .07), transparent 60%),
+      radial-gradient(1200px 600px at 12% -10%, rgba(34, 211, 238, .20), transparent 60%),
+      radial-gradient(900px 500px at 92% 0%, rgba(168, 85, 247, .16), transparent 55%),
+      radial-gradient(1000px 700px at 50% 115%, rgba(34, 197, 94, .11), transparent 60%),
       var(--bg);
     color: var(--text);
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -65,8 +65,13 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 16px;
-    box-shadow: 0 18px 50px -30px rgba(0, 0, 0, .9);
+    box-shadow: 0 20px 55px -34px rgba(0, 0, 0, .75);
     backdrop-filter: blur(6px);
+  }
+  .heatmap-panel {
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, .10),
+      0 28px 75px -48px rgba(34, 211, 238, .55);
   }
 
   /* ---------- Controls ---------- */
@@ -81,7 +86,7 @@
   }
   .control.grow { flex: 1 1 300px; }
   input[type=text], input[type=number], select {
-    background: #0a1120; border: 1px solid rgba(148, 163, 184, .22);
+    background: #121d31; border: 1px solid rgba(148, 163, 184, .26);
     border-radius: 10px; color: var(--text); font: inherit; padding: 9px 11px;
     outline: none; transition: border-color .15s, box-shadow .15s;
   }
@@ -131,7 +136,7 @@
   /* ---------- Layout ---------- */
   .layout {
     display: grid;
-    grid-template-columns: minmax(250px, .9fr) minmax(380px, 1.45fr) minmax(250px, .8fr);
+    grid-template-columns: minmax(240px, .85fr) minmax(460px, 1.65fr) minmax(240px, .8fr);
     gap: 16px; align-items: start;
   }
   .panel { padding: 14px; }
@@ -145,6 +150,10 @@
   }
   .hint { font-size: .67rem; color: var(--dim); }
   canvas { display: block; max-width: 100%; height: auto; border-radius: 8px; }
+  #overview, #heatmap {
+    background: #0b1424;
+    border: 1px solid rgba(148, 163, 184, .16);
+  }
   #overview { cursor: pointer; }
 
   .legend {
@@ -153,7 +162,8 @@
   }
   .gradient {
     flex: 1; min-width: 90px; height: 9px; border-radius: 99px;
-    background: linear-gradient(90deg, #070b14, #0e7490 18%, #22c55e 42%, #eab308 68%, #f97316 86%, #ef4444);
+    box-shadow: 0 0 14px rgba(34, 211, 238, .22);
+    background: linear-gradient(90deg, #121a2a, #0b4f78 12%, #00a6d6 26%, #00e0b0 43%, #8cf000 58%, #ffe600 72%, #ff8a00 86%, #ff2d55 96%, #fff2e6);
   }
 
   /* ---------- Top-k ---------- */
@@ -178,7 +188,7 @@
   .detail { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
   .detail-row { display: flex; justify-content: space-between; font-size: .82rem; color: var(--muted); padding: 2px 0; }
   .detail-row b { color: var(--text); font-family: ui-monospace, monospace; }
-  #spark { width: 100%; height: auto; margin-top: 10px; background: #070d18; border: 1px solid var(--border); border-radius: 8px; }
+  #spark { width: 100%; height: auto; margin-top: 10px; background: #0b1424; border: 1px solid var(--border); border-radius: 8px; }
   .muted { color: var(--dim); font-size: .8rem; }
   .small { font-size: .67rem; margin-top: 4px; }
 
@@ -265,7 +275,7 @@
     background: rgba(139, 92, 246, .18);
   }
   #attnfan, #attnmap {
-    width: 100%; height: auto; background: #070d18;
+    width: 100%; height: auto; background: #0b1424;
     border: 1px solid var(--border); border-radius: 8px;
   }
   .attn-legend {
@@ -274,7 +284,8 @@
   }
   .attn-gradient {
     flex: 1; min-width: 80px; height: 7px; border-radius: 99px;
-    background: linear-gradient(90deg, #070b14, #312e81 20%, #6d28d9 45%, #c026d3 70%, #f472b6 88%, #ffffff);
+    box-shadow: 0 0 12px rgba(168, 85, 247, .30);
+    background: linear-gradient(90deg, #121a2a, #3b2f9e 18%, #7c3aed 42%, #d946ef 68%, #fb7185 86%, #ffffff);
   }
   @media (max-width: 1000px) {
     .attn-grid { grid-template-columns: 1fr; }
@@ -557,18 +568,23 @@
     return lut;
   }
   const POS_LUT = makeLUT([
-    [0, [7, 11, 20]], [.16, [13, 74, 92]], [.40, [14, 116, 144]],
-    [.62, [34, 197, 94]], [.80, [234, 179, 8]], [.92, [249, 115, 22]], [1, [239, 68, 68]]
+    [0, [18, 26, 42]], [.08, [18, 58, 104]], [.18, [0, 128, 186]],
+    [.32, [0, 202, 228]], [.48, [0, 235, 158]], [.62, [128, 244, 52]],
+    [.74, [244, 236, 34]], [.86, [255, 156, 18]], [.94, [255, 66, 58]],
+    [1, [255, 244, 232]]
   ]);
-  const NEG_LUT = makeLUT([[0, [7, 11, 20]], [.55, [30, 58, 138]], [1, [96, 165, 250]]]);
+  const NEG_LUT = makeLUT([
+    [0, [18, 26, 42]], [.35, [38, 66, 158]], [.65, [78, 106, 255]],
+    [.85, [144, 100, 255]], [1, [204, 168, 255]]
+  ]);
   const ATTN_LUT = makeLUT([
-    [0, [7, 11, 20]], [.20, [49, 46, 129]], [.45, [109, 40, 217]],
-    [.70, [192, 38, 211]], [.88, [244, 114, 182]], [1, [255, 255, 255]]
+    [0, [18, 26, 42]], [.18, [55, 48, 160]], [.40, [124, 45, 240]],
+    [.62, [208, 38, 230]], [.82, [255, 90, 170]], [1, [255, 246, 250]]
   ]);
 
   function colorFor(v) {
     const t = Math.min(1, Math.abs(v) / (scaleMax || 1));
-    const idx = Math.round(Math.pow(t, 0.55) * 255);
+    const idx = Math.round(Math.pow(t, 0.62) * 255);
     return v < 0 ? NEG_LUT[idx] : POS_LUT[idx];
   }
 
@@ -718,8 +734,8 @@
     const p = REDUCED ? 1 : clamp((now - anim.start) / 780);
 
     // Espina de la señal
-    octx.strokeStyle = 'rgba(34,211,238,.16)';
-    octx.lineWidth = 2;
+    octx.strokeStyle = 'rgba(34,211,238,.28)';
+    octx.lineWidth = 2.5;
     octx.beginPath();
     octx.moveTo(20, rowH * .25);
     octx.lineTo(20, h - rowH * .25);
@@ -728,12 +744,12 @@
     // Onda que baja por las capas
     if (p < 1) {
       const wy = p * h;
-      const g = octx.createLinearGradient(0, wy - 26, 0, wy + 26);
+      const g = octx.createLinearGradient(0, wy - 30, 0, wy + 30);
       g.addColorStop(0, 'rgba(34,211,238,0)');
-      g.addColorStop(.5, 'rgba(34,211,238,.22)');
+      g.addColorStop(.5, 'rgba(125,245,255,.38)');
       g.addColorStop(1, 'rgba(34,211,238,0)');
       octx.fillStyle = g;
-      octx.fillRect(0, wy - 26, w, 52);
+      octx.fillRect(0, wy - 30, w, 60);
     }
 
     for (let l = 0; l < n; l++) {
@@ -741,19 +757,19 @@
       const sel = l === selectedLayer;
 
       if (sel) {
-        octx.fillStyle = 'rgba(34,211,238,.10)';
+        octx.fillStyle = 'rgba(34,211,238,.16)';
         octx.fillRect(0, y, w, rowH);
-        octx.fillStyle = '#22d3ee';
-        octx.fillRect(0, y, 3, rowH);
+        octx.fillStyle = '#67e8f9';
+        octx.fillRect(0, y, 4, rowH);
       }
 
-      octx.strokeStyle = 'rgba(148,163,184,.10)';
+      octx.strokeStyle = 'rgba(148,163,184,.12)';
       octx.beginPath();
       octx.moveTo(0, y + rowH);
       octx.lineTo(w, y + rowH);
       octx.stroke();
 
-      octx.fillStyle = sel ? '#67e8f9' : '#64748b';
+      octx.fillStyle = sel ? '#a5f3fc' : '#8fa1bd';
       octx.font = '600 11px ui-monospace, monospace';
       octx.fillText(`capa ${l}`, 26, y + rowH / 2 + 4);
 
@@ -764,11 +780,11 @@
         const item = top[k];
         const v = item ? item[1] : 0;
         if (item) maxVal = Math.max(maxVal, v);
-        octx.fillStyle = item ? colorFor(v) : 'rgba(148,163,184,.05)';
+        octx.fillStyle = item ? colorFor(v) : 'rgba(148,163,184,.07)';
         octx.fillRect(x, y + rowH * .18, cellW, rowH * .64);
       }
 
-      octx.fillStyle = '#475569';
+      octx.fillStyle = '#8fa1bd';
       octx.font = '10px ui-monospace, monospace';
       octx.fillText(maxVal.toFixed(2), w - 40, y + rowH / 2 + 3);
     }
@@ -798,7 +814,26 @@
       const cx = i % COLS;
       const cy = (i / COLS) | 0;
       hctx.fillStyle = colorFor(lerpVal(key, i, t));
-      hctx.fillRect(cx * CELL, cy * CELL, CELL - 1, CELL - 1);
+      hctx.fillRect(cx * CELL, cy * CELL, CELL - 0.75, CELL - 0.75);
+    }
+
+    // Destello de las neuronas que acaban de encenderse: el cambio se ve
+    // como un pulso blanco-amarillo que se apaga en ~420 ms.
+    const before = prev[key], after = curr[key];
+    if (!REDUCED && t < 1 && before && after) {
+      hctx.save();
+      hctx.globalCompositeOperation = 'lighter';
+      hctx.fillStyle = '#fff0bf';
+      for (let i = 0; i < n; i++) {
+        const d = (after[i] || 0) - (before[i] || 0);
+        if (d <= 0) continue;
+        const k = d / (scaleMax || 1);
+        if (k < 0.10) continue;
+        const cx = i % COLS, cy = (i / COLS) | 0;
+        hctx.globalAlpha = Math.min(.85, k * 1.7 * (1 - t));
+        hctx.fillRect(cx * CELL, cy * CELL, CELL - 0.5, CELL - 0.5);
+      }
+      hctx.restore();
     }
 
     // Glow sobre las neuronas más activas
@@ -808,29 +843,39 @@
     for (const [idx, v] of top) {
       if (v <= 0) continue;
       const cx = idx % COLS, cy = (idx / COLS) | 0;
-      hctx.globalAlpha = clamp(v / (scaleMax || 1), 0, 1) * 0.5;
-      hctx.drawImage(glowSprite, cx * CELL - CELL, cy * CELL - CELL, CELL * 3, CELL * 3);
+      hctx.globalAlpha = clamp(v / (scaleMax || 1), 0, 1) * 0.95;
+      hctx.drawImage(
+        glowSprite,
+        cx * CELL - CELL * 1.2,
+        cy * CELL - CELL * 1.2,
+        CELL * 3.4,
+        CELL * 3.4
+      );
     }
     hctx.restore();
 
     // Anillo de la neurona seleccionada
     if (selectedNeuron !== null && selectedNeuron < n) {
       const cx = selectedNeuron % COLS, cy = (selectedNeuron / COLS) | 0;
-      hctx.strokeStyle = '#a5f3fc';
-      hctx.lineWidth = 2;
+      hctx.save();
+      hctx.strokeStyle = '#ffffff';
+      hctx.lineWidth = 2.5;
+      hctx.shadowColor = '#22d3ee';
+      hctx.shadowBlur = 12;
       hctx.strokeRect(cx * CELL - 1.5, cy * CELL - 1.5, CELL + 1, CELL + 1);
+      hctx.restore();
     }
 
     // Barrido al recibir un token
     const sp = REDUCED ? 1 : clamp((now - anim.start) / 620);
     if (sp < 1) {
       const x = sp * w;
-      const g = hctx.createLinearGradient(x - 40, 0, x + 40, 0);
+      const g = hctx.createLinearGradient(x - 52, 0, x + 52, 0);
       g.addColorStop(0, 'rgba(34,211,238,0)');
-      g.addColorStop(.5, 'rgba(34,211,238,.16)');
+      g.addColorStop(.5, 'rgba(125,245,255,.30)');
       g.addColorStop(1, 'rgba(34,211,238,0)');
       hctx.fillStyle = g;
-      hctx.fillRect(x - 40, 0, 80, h);
+      hctx.fillRect(x - 52, 0, 104, h);
     }
   }
 
