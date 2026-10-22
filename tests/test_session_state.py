@@ -37,9 +37,7 @@ class FakeBridge:
             cache[f"blocks.{layer}.mlp.hook_post"] = torch.full(
                 (1, 1, 3), self.offset + layer + 1.0
             )
-            cache[f"blocks.{layer}.attn.hook_pattern"] = torch.full(
-                (1, 2, 1, total), 1.0 / total
-            )
+            cache[f"blocks.{layer}.attn.hook_pattern"] = torch.full((1, 2, 1, total), 1.0 / total)
         logits = torch.zeros(1, seq, 5)
         if use_cache:
             return (logits, {"length": total}), cache
@@ -92,12 +90,8 @@ def test_forward_once_devuelve_activaciones_y_atencion_locales():
 
 def test_forward_once_crece_el_estado_de_decodificacion():
     model = make_model()
-    _, _, attention_1, state, _ = server.forward_once(
-        torch.tensor([[1, 2]]), model, None
-    )
-    _, _, attention_2, state, _ = server.forward_once(
-        torch.tensor([[1, 2, 3]]), model, state
-    )
+    _, _, attention_1, state, _ = server.forward_once(torch.tensor([[1, 2]]), model, None)
+    _, _, attention_2, state, _ = server.forward_once(torch.tensor([[1, 2, 3]]), model, state)
 
     assert attention_1["tokens"] == ["a", "b"]
     assert attention_2["tokens"] == ["a", "b", "c"]

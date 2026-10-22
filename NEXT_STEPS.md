@@ -35,7 +35,7 @@ WORKDIR /app
 
 # Solo CPU. Para GPU ver la variante más abajo.
 COPY requirements.txt ./
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
  && pip install -r requirements.txt
 
 COPY server.py index.html ./
@@ -49,10 +49,14 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-> Las dependencias se fijan en `requirements.txt`. El orden importa: instalar `torch` desde el índice
-> **CPU** reduce la imagen de ~3 GB (con CUDA) a ~1.5 GB, y como `requirements.txt` fija `torch==2.14.1`,
-> pip reutiliza esa rueda CPU en lugar de bajar la de CUDA. `PIP_NO_CACHE_DIR=1` evita que la imagen
-> engorde con las ruedas descargadas.
+> Las dependencias se fijan en `requirements.txt`. El orden importa: instalar `torch==2.14.1` desde el
+> índice **CPU** reduce la imagen de ~3 GB (con CUDA) a ~1.5 GB. El build verificado instala
+> `torch 2.14.1+cpu` con `torch.version.cuda is None`; `PIP_NO_CACHE_DIR=1` evita que la imagen engorde
+> con las ruedas descargadas.
+
+**RAM medida en el proceso servidor (macOS, CPU):** GPT-2 ~1,2 GB tras cargar y ~1,4 GB de pico con
+512 tokens; Qwen2.5-0.5B ~2,3 GB y ~2,7 GB respectivamente. El límite de 6 GB del compose deja margen
+para el modelo y el sistema.
 
 ### `.dockerignore`
 
@@ -268,13 +272,28 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   modelo no devuelve caché, se vuelve al forward completo. `VISUALIZER_KV_CACHE=0` permite comparar o
   revertir sin tocar código. Con GPT-2 y 512 tokens de contexto el coste por token bajó de ~0,158 s a
   ~0,012 s (~13×).
+- **Docker y RAM:** **implementado** — el `Dockerfile` fija `torch==2.14.1` desde el índice CPU
+  (build verificado con `torch 2.14.1+cpu`, sin CUDA) y el README documenta el RSS medido para GPT-2 y
+  Qwen. El compose mantiene el límite de 6 GB.
+- **Payload por capa (protocolo 2):** **implementado** — el cliente pide `select_layer`; el servidor
+  guarda la capa por conexión, responde con `layer` usando el último estado completo y envía en cada
+  `step` solo `activations["layer_N"]` más `stats` globales para el informe. El overview (`top`) y la
+  atención siguen completos. Medido con GPT-2: ~32–36 KiB por step (antes ~258 KiB); Qwen ~67 KiB
+  (antes ~0,8 MB). El cambio de capa es inmediato y no vacía el heatmap.
+- **Muestreo y semántica del informe:** **implementado** — la UI expone `top_p` (0–1) y
+  `no_repeat_ngram` (0–10) además de los controles existentes; ambos viajan en `params` y se muestran
+  en el informe. El informe define “activación más intensa” como máximo valor absoluto (muestra el
+  signo), etiqueta la media como `|activación|`, aclara que el récord de atención sale del top-8
+  enviado y ya no describe cada token como una “pasada completa” (el prompt se procesa una vez y los
+  tokens siguientes reutilizan el KV cache cuando está disponible).
 - **Concurrencia y locks:** **implementado** — `load_lock` evita cargas duplicadas del mismo modelo y
   `generation_lock` serializa las generaciones. El segundo cliente recibe `queued` y espera; las
   activaciones, la atención y la decodificación son locales a cada generación, así que no se mezclan.
 - **Decodificación incremental:** **implementado** — cada `step` envía `delta` (con `token` como alias),
   decodificado desde el prefijo completo para no partir caracteres UTF-8 multibyte; los tokens parciales
-  de atención quedan vacíos y `done.generated_text` permite reconciliar el stream. El smoke test verifica
-  que no haya `�` ni diferencias entre el stream y el texto final.
+  de atención quedan vacíos, los especiales se etiquetan con su nombre y `done.generated_text` permite
+  reconciliar el stream. El smoke test verifica que no haya `�` ni diferencias entre el stream y el texto
+  final.
 - **Errores y validación del WebSocket:** **implementado** — Pydantic valida `generate` antes de tocar el
   modelo; los errores de entrada (`invalid_request`, `invalid_json`) no cierran el socket y los fallos
   internos se reportan con `recoverable: false` antes de cerrar con código 1011.
@@ -282,11 +301,35 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   `act_fn(gate_proj(x)) * up_proj(x)` (la neurona completa, antes de `down_proj`).
 - **Atención:** **implementado** — se captura `blocks.{i}.attn.hook_pattern`, se toma la última query
   y se envían las top-8 conexiones por cabeza; la UI dibuja el fan y el mapa cabezas × tokens.
+- **Atención honesta:** **implementado** — la leyenda y el tooltip aclaran que solo se dibuja el top-8
+  por cabeza; las celdas restantes llevan un punto tenue para no confundirlas con atención cero. Los
+  tokens especiales de los modelos chat se etiquetan con su nombre real en vez de quedar en blanco.
+- **Canvas y retina:** **implementado** — el heatmap y la animación se limitan a ~30 fps, la atención
+  solo se redibuja cuando cambia y los canvas escalan su backing store por `devicePixelRatio` (máximo
+  2×) manteniendo el tamaño CSS.
+- **Tests, lint y CI:** **implementado** — `pyproject.toml` concentra la configuración de Ruff y pytest;
+  `ruff check`/`ruff format --check` pasan, la suite unitaria excluye los tests `slow` y
+  `tests/test_integration_slow.py` valida un forward real de GPT-2 con KV cache. El workflow de GitHub
+  Actions usa Python 3.12, caché de Hugging Face, Ruff y `pytest -q -m "not slow"`.
+- **Logging y salud:** **implementado** — se sustituyó `print` por `logging` con tiempos de carga,
+  forward (contexto, entrada y modo de caché), tamaño de cada payload y errores con traza. `/health`
+  informa `model_key` y `ready` sin cargar ni descargar el modelo. `VISUALIZER_LOG_LEVEL` permite ajustar
+  el nivel.
 - **Informe automático:** **implementado** — resume la generación en lenguaje claro (capa y neurona
-  récord, atención más fuerte, muestreo y motivo de parada) y explica los términos. Incluye botón
-  para copiar el informe.
+  con mayor |activación|, capa con mayor media |activación|, atención más fuerte del top-8, todos los
+  parámetros de muestreo y motivo de parada) y explica los términos. Incluye botón para copiar el
+  informe.
+- **Detalles de robustez:** **implementado** — `index.html` se sirve con una ruta resuelta desde
+  `server.py` (no depende del directorio de trabajo), EOS se compara contra un `set` para admitir
+  `eos_token_id` escalar o lista, y las etiquetas del overview/detalle usan el `top_k` del servidor. El
+  panel ordena por activación con signo y lo explicita para no confundirlo con la magnitud.
 - **Comparar prompts:** guardar dos pasadas y mostrar el *diferencial* de activación (qué neuronas cambian).
 - **Ablación interactiva:** clic en una neurona → apagarla y ver cómo cambia el texto generado.
-- **Exportar:** volcar las activaciones de una generación a CSV/Parquet para analizarlas fuera.
+- **Exportar CSV:** **implementado** — la casilla **todas las capas** activa `capture_all` en el
+  mensaje `generate`; el servidor envía entonces todas las capas en cada `step` y el cliente las guarda
+  como `Float32Array`. Al terminar, **CSV capa** descarga la capa visible con formato
+  `step,token,layer,neuron,activation` (una fila por neurona y token). El modo normal mantiene el
+  payload de una sola capa. Queda pendiente la exportación a Parquet y de todas las capas en un solo
+  archivo.
 - **Rendimiento:** el servidor mantiene un solo modelo en RAM y serializa las generaciones. Para
   paralelismo real habría que aislar el bridge/caché por conexión.

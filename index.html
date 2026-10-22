@@ -84,6 +84,12 @@
     font-size: .66rem; letter-spacing: .07em; text-transform: uppercase;
     color: var(--dim); font-weight: 700;
   }
+  .control label.check {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .72rem; font-weight: 500; letter-spacing: 0; text-transform: none;
+    color: var(--muted); white-space: nowrap; padding: 9px 0 3px;
+  }
+  .control input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
   .control.grow { flex: 1 1 300px; }
   input[type=text], input[type=number], select {
     background: #121d31; border: 1px solid rgba(148, 163, 184, .26);
@@ -216,7 +222,9 @@
     border-radius: 8px; padding: 5px 12px; font: 600 .72rem inherit; cursor: pointer;
     transition: color .15s, border-color .15s;
   }
-  .ghost-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .ghost-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  .ghost-btn:disabled { opacity: .45; cursor: default; }
+  .report-actions { display: flex; gap: 8px; }
   .report { font-size: .9rem; color: var(--muted); line-height: 1.6; }
   .report p { margin: 0 0 10px; }
   .report b { color: var(--text); }
@@ -286,6 +294,14 @@
     flex: 1; min-width: 80px; height: 7px; border-radius: 99px;
     box-shadow: 0 0 12px rgba(168, 85, 247, .30);
     background: linear-gradient(90deg, #121a2a, #3b2f9e 18%, #7c3aed 42%, #d946ef 68%, #fb7185 86%, #ffffff);
+  }
+  .attn-note {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--dim); white-space: nowrap;
+  }
+  .attn-dot {
+    width: 5px; height: 5px; border-radius: 50%; display: inline-block;
+    background: rgba(148, 163, 184, .45);
   }
   @media (max-width: 1000px) {
     .attn-grid { grid-template-columns: 1fr; }
@@ -374,11 +390,25 @@
   </div>
   <div class="control">
     <label for="top_k">Top-k</label>
-    <input id="top_k" type="number" value="40" min="0" title="top_k">
+    <input id="top_k" type="number" value="40" min="0" title="top_k (0 = sin filtro)">
+  </div>
+  <div class="control">
+    <label for="top_p">Top-p</label>
+    <input id="top_p" type="number" value="0.95" step="0.05" min="0" max="1" title="top_p (1 = sin filtro nucleus)">
   </div>
   <div class="control">
     <label for="rep_penalty">Rep. penalty</label>
     <input id="rep_penalty" type="number" value="1.15" step="0.05" min="1" title="repetition_penalty">
+  </div>
+  <div class="control">
+    <label for="no_repeat_ngram">N-grama</label>
+    <input id="no_repeat_ngram" type="number" value="0" step="1" min="0" max="10" title="no_repeat_ngram: prohíbe repetir secuencias de N tokens (0 o 1 = desactivado; N≥2 activo)">
+  </div>
+  <div class="control">
+    <label for="capture_all">Exportar</label>
+    <label class="check" title="Captura todas las capas para poder descargar el CSV de cualquiera de ellas al terminar">
+      <input id="capture_all" type="checkbox"> todas las capas
+    </label>
   </div>
   <div class="control action">
     <button id="send">Generar</button>
@@ -396,7 +426,7 @@
     </div>
     <canvas id="overview" width="640" height="420"></canvas>
     <div class="legend">
-      <span>Top-16 por capa</span>
+      <span>Top-<b id="overview-k">16</b> por capa</span>
       <span class="gradient"></span>
       <span>0 → <b id="scale-max">–</b></span>
     </div>
@@ -418,8 +448,8 @@
   <aside class="side">
     <section class="panel card">
       <div class="panel-head">
-        <h2>Neuronas más activas</h2>
-        <span class="hint" id="topk-layer">capa 0</span>
+        <h2>Neuronas con mayor activación</h2>
+        <span class="hint" id="topk-layer">capa 0 · valor con signo</span>
       </div>
       <div id="topk"></div>
     </section>
@@ -443,7 +473,7 @@
 <section class="panel card attn-panel">
   <div class="panel-head">
     <h2>Atención: a qué mira el token</h2>
-    <span class="hint" id="attn-hint">conexiones reales entre tokens</span>
+    <span class="hint" id="attn-hint">top-8 por cabeza · el resto no se dibuja</span>
   </div>
   <div class="attn-grid">
     <div class="attn-col">
@@ -454,8 +484,9 @@
       <canvas id="attnfan" width="760" height="210"></canvas>
       <div class="attn-legend">
         <span>0</span><span class="attn-gradient"></span><span>peso de atención</span>
+        <span class="attn-note">top-8 por cabeza</span>
       </div>
-      <div class="muted small">Cada línea une el token que predice con sus 8 conexiones más fuertes. Grosor = peso de atención.</div>
+      <div class="muted small">Cada línea une el token que predice con sus 8 conexiones más fuertes. Grosor = peso de atención; el resto no se dibuja.</div>
     </div>
     <div class="attn-col">
       <div class="attn-sub">
@@ -464,8 +495,9 @@
       <canvas id="attnmap" width="760" height="230"></canvas>
       <div class="attn-legend">
         <span>0</span><span class="attn-gradient"></span><span>1</span>
+        <span class="attn-note"><i class="attn-dot"></i>fuera del top-8</span>
       </div>
-      <div class="muted small">Filas = cabezas · columnas = tokens · brillo = atención.</div>
+      <div class="muted small">Filas = cabezas · columnas = tokens · brillo = atención. Las celdas con un punto quedan fuera del top-8 y no significan atención cero.</div>
     </div>
   </div>
   <div id="attn-empty" class="muted" hidden>
@@ -476,7 +508,7 @@
 <section class="panel card stream-panel">
   <div class="panel-head">
     <h2>El modelo escribe</h2>
-    <span class="hint" id="stream-hint">cada token es una nueva pasada por todas las capas</span>
+    <span class="hint" id="stream-hint">cada token recorre todas las capas</span>
   </div>
   <div class="token-stream">
     <span class="prompt-echo" id="prompt-echo"></span><span id="stream"></span><span class="caret" id="caret" style="display:none"></span>
@@ -486,7 +518,10 @@
 <section class="panel card report-panel">
   <div class="panel-head">
     <h2>Informe: ¿qué pasó en esta generación?</h2>
-    <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
+    <div class="report-actions">
+      <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
+      <button id="export-csv" class="ghost-btn" disabled title="Descargar en CSV las neuronas de la capa visible durante toda la generación (requiere activar «todas las capas» antes de generar)">CSV capa</button>
+    </div>
   </div>
   <div id="report" class="report">
     <p class="muted">Pulsa <b>Generar</b> y aquí aparecerá un informe en lenguaje claro con lo que ocurrió por dentro.</p>
@@ -499,8 +534,8 @@
     <p>Estás viendo las <b>neuronas de la MLP</b> de un transformer: los “perceptrones” internos que transforman la información en cada capa.</p>
     <ul>
       <li><b>Cada celda</b> del mapa es una neurona. El color indica cuánto se activa: oscuro = poco, verde/amarillo/rojo = mucho; azul = activación negativa.</li>
-      <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus 16 neuronas más activas.</li>
-      <li><b>Cada token</b> es una pasada completa por el modelo: por eso el patrón cambia y se anima.</li>
+      <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus <b id="explainer-topk">16</b> neuronas con mayor activación (valor con signo, no magnitud).</li>
+      <li><b>Cada token nuevo</b> recorre las capas (reutilizando el KV cache cuando está disponible): por eso el patrón cambia y se anima.</li>
       <li>Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
       <li>El panel de <b>atención</b> muestra las conexiones reales: a qué tokens anteriores mira cada cabeza al predecir el siguiente. Cada cabeza es un “canal” distinto.</li>
     </ul>
@@ -527,10 +562,16 @@
   let selectedNeuron = null;
   let scaleMax = 1;
   let prev = {}, curr = {}, topkData = {};
+  // Cada paso completo se guarda como Float32Array por capa para que el CSV
+  // pueda elegir cualquier capa sin reenviar datos al servidor.
+  let capturedSteps = [];
   let spark = [];
   let tokenCount = 0;
   let running = false;
   let needsDraw = true;
+  let needsAttnDraw = true;
+  let lastDraw = 0;
+  const FRAME_MS = 1000 / 30;
   const anim = { start: performance.now(), dur: 420 };
 
   let attnData = { tokens: [], layers: {} };
@@ -541,14 +582,75 @@
   function emptyReport() {
     return {
       prompt: '', tokens: 0, requested: 0, startedAt: 0, firstStepAt: 0, elapsed: 0,
-      modelLabel: '', layers: 0, neurons: 0, stopped: '',
-      maxAct: { value: -Infinity, layer: 0, neuron: 0, token: '' },
+      modelLabel: '', modelKey: '', layers: 0, neurons: 0, stopped: '', captureAll: false,
+      maxAct: { value: -Infinity, abs: -Infinity, layer: 0, neuron: 0, token: '' },
       maxLayerMean: { value: -Infinity, layer: 0 },
       strongestAttn: { weight: -Infinity, layer: 0, head: 0, pos: 0, token: '', predicted: '' },
       sampling: null,
     };
   }
   let report = emptyReport();
+
+  function setLayer(layer, values) {
+    // La capa solo cambia cuando el servidor confirma con `layer` o cuando
+    // llega un `step`; así el heatmap no queda vacío entre clic y respuesta.
+    selectedLayer = clamp(layer, 0, META.layers - 1);
+    selectedNeuron = null;
+    spark = [];
+    if (Array.isArray(values) && values.length) {
+      const key = `layer_${selectedLayer}`;
+      curr[key] = values;
+      prev[key] = values;
+    }
+    document.getElementById('heatmap-title').textContent =
+      `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+    if (capturedSteps.length) {
+      exportCsvBtn.title =
+        `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
+    }
+    renderTopk();
+    updateDetail();
+    needsDraw = true;
+    needsAttnDraw = true;
+  }
+
+  /* =========================================================
+     Canvas nítido en pantallas retina
+     ========================================================= */
+  function pixelRatio() {
+    // Limitar a 2 evita backings enormes en pantallas 3x.
+    return Math.min(2, window.devicePixelRatio || 1);
+  }
+
+  function prepareCanvas(canvas, ctx, cssWidth, cssHeight) {
+    const w = Math.max(1, Math.round(cssWidth));
+    const h = Math.max(1, Math.round(cssHeight));
+    const dpr = pixelRatio();
+    const bw = Math.round(w * dpr);
+    const bh = Math.round(h * dpr);
+    canvas._cssWidth = w;
+    canvas._cssHeight = h;
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+    // El tamaño CSS se mantiene en píxeles lógicos: el navegador escala el
+    // backing store por devicePixelRatio y el dibujo conserva sus coordenadas.
+    canvas.style.width = `${w}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function canvasW(canvas) {
+    return canvas._cssWidth || canvas.width;
+  }
+
+  function canvasH(canvas) {
+    return canvas._cssHeight || canvas.height;
+  }
+
+  function clearCanvas(ctx, canvas) {
+    ctx.clearRect(0, 0, canvasW(canvas), canvasH(canvas));
+  }
 
   /* =========================================================
      Paleta (LUT) y sprite de glow
@@ -627,7 +729,10 @@
   const modeSelect = document.getElementById('mode');
   const temperatureInput = document.getElementById('temperature');
   const topKInput = document.getElementById('top_k');
+  const topPInput = document.getElementById('top_p');
   const repPenaltyInput = document.getElementById('rep_penalty');
+  const noRepeatNgramInput = document.getElementById('no_repeat_ngram');
+  const captureAllInput = document.getElementById('capture_all');
   const modelBadge = document.getElementById('model-badge');
   const chipModel = document.getElementById('chip-model');
   const chipLayers = document.getElementById('chip-layers');
@@ -638,6 +743,8 @@
   const dNeuron = document.getElementById('d-neuron');
   const dValue = document.getElementById('d-value');
   const dRank = document.getElementById('d-rank');
+  const overviewK = document.getElementById('overview-k');
+  const explainerTopK = document.getElementById('explainer-topk');
   const sparkCanvas = document.getElementById('spark');
   const sparkCtx = sparkCanvas.getContext('2d');
   const attnFan = document.getElementById('attnfan');
@@ -650,6 +757,7 @@
   const attnGrid = document.querySelector('.attn-grid');
   const reportEl = document.getElementById('report');
   const copyReportBtn = document.getElementById('copy-report');
+  const exportCsvBtn = document.getElementById('export-csv');
 
   function setBadge(state, text) {
     modelBadge.className = `badge ${state}`;
@@ -678,8 +786,7 @@
     const g = gridDims(META.neurons_per_layer);
     COLS = g.cols;
     ROWS = g.rows;
-    heatmap.width = COLS * CELL;
-    heatmap.height = ROWS * CELL;
+    prepareCanvas(heatmap, hctx, COLS * CELL, ROWS * CELL);
     needsDraw = true;
   }
 
@@ -688,25 +795,23 @@
   function layoutOverview() {
     const w = Math.max(300, Math.round(overview.getBoundingClientRect().width || 640));
     const h = Math.max(300, Math.round(w * 0.8));
-    if (overview.width !== w || overview.height !== h) {
-      overview.width = w;
-      overview.height = h;
-      needsDraw = true;
-    }
+    prepareCanvas(overview, octx, w, h);
+    needsDraw = true;
   }
   function layoutAttention() {
     const wf = Math.max(300, Math.round(attnFan.getBoundingClientRect().width || 760));
-    if (attnFan.width !== wf) { attnFan.width = wf; attnFan.height = 210; }
+    prepareCanvas(attnFan, attnFanCtx, wf, 210);
     const wm = Math.max(300, Math.round(attnMap.getBoundingClientRect().width || 760));
-    if (attnMap.width !== wm) { attnMap.width = wm; attnMap.height = 230; }
-    needsDraw = true;
+    prepareCanvas(attnMap, attnMapCtx, wm, 230);
+    needsAttnDraw = true;
   }
   layoutOverview();
   layoutAttention();
+  resizeHeatmap();
+  prepareCanvas(sparkCanvas, sparkCtx, 260, 76);
   window.addEventListener('resize', () => {
     layoutOverview();
     layoutAttention();
-    needsDraw = true;
   });
 
   /* =========================================================
@@ -723,7 +828,7 @@
   }
 
   function drawOverview(now) {
-    const w = overview.width, h = overview.height;
+    const w = canvasW(overview), h = canvasH(overview);
     octx.clearRect(0, 0, w, h);
 
     const n = Math.max(1, META.layers);
@@ -804,7 +909,7 @@
   }
 
   function drawHeatmap(now) {
-    const w = heatmap.width, h = heatmap.height;
+    const w = canvasW(heatmap), h = canvasH(heatmap);
     hctx.clearRect(0, 0, w, h);
     const key = `layer_${selectedLayer}`;
     const t = animT();
@@ -901,9 +1006,10 @@
     attnEmpty.hidden = ok;
     attnGrid.style.display = ok ? '' : 'none';
     if (!ok) {
-      attnFanCtx.clearRect(0, 0, attnFan.width, attnFan.height);
-      attnMapCtx.clearRect(0, 0, attnMap.width, attnMap.height);
+      clearCanvas(attnFanCtx, attnFan);
+      clearCanvas(attnMapCtx, attnMap);
     }
+    needsAttnDraw = true;
   }
 
   function renderAttnHeads() {
@@ -920,7 +1026,7 @@
 
   function drawAttnMap(heads) {
     const ctx = attnMapCtx;
-    const w = attnMap.width, h = attnMap.height;
+    const w = canvasW(attnMap), h = canvasH(attnMap);
     ctx.clearRect(0, 0, w, h);
     const tokens = attnData.tokens;
     const n = tokens.length;
@@ -944,12 +1050,27 @@
       ctx.textAlign = 'left';
       ctx.fillText(`c${head}`, 4, y + rowH / 2 + 3);
 
+      const included = new Set();
       for (const [pos, weight] of heads[head]) {
         if (pos < 0 || pos >= n) continue;
+        included.add(pos);
         ctx.fillStyle = attnColor(weight);
         const cw = Math.max(1, colW - 1);
         const ch = Math.max(1, rowH - 1.5);
         ctx.fillRect(labelW + pos * colW, y + .75, cw, ch);
+      }
+
+      // Las celdas que no están en el top-8 no son atención 0: las marcamos
+      // con un punto tenue para no confundirlas con un peso realmente nulo.
+      const dot = Math.max(1, Math.min(2, Math.floor(Math.min(colW, rowH) / 5)));
+      ctx.fillStyle = 'rgba(148,163,184,.30)';
+      for (let pos = 0; pos < n; pos++) {
+        if (included.has(pos)) continue;
+        ctx.fillRect(
+          labelW + pos * colW + (colW - dot) / 2,
+          y + rowH - dot - 1,
+          dot, dot
+        );
       }
     }
 
@@ -974,7 +1095,7 @@
 
   function drawAttnFan(heads, headIdx) {
     const ctx = attnFanCtx;
-    const w = attnFan.width, h = attnFan.height;
+    const w = canvasW(attnFan), h = canvasH(attnFan);
     ctx.clearRect(0, 0, w, h);
     const tokens = attnData.tokens;
     const pairs = (heads[headIdx] || []).slice(0, attnMeta.top_k || 8);
@@ -1043,8 +1164,8 @@
     const layer = attnData.layers && attnData.layers[`layer_${selectedLayer}`];
     if (!layer || !layer.length) {
       attnGeom = null;
-      attnMapCtx.clearRect(0, 0, attnMap.width, attnMap.height);
-      attnFanCtx.clearRect(0, 0, attnFan.width, attnFan.height);
+      clearCanvas(attnMapCtx, attnMap);
+      clearCanvas(attnFanCtx, attnFan);
       return;
     }
     const head = Math.min(attnHead, layer.length - 1);
@@ -1053,11 +1174,21 @@
   }
 
   function frame(now) {
-    if (needsDraw || now - anim.start < 1000) {
-      drawOverview(now);
-      drawHeatmap(now);
-      drawAttention();
-      needsDraw = false;
+    const animating = !REDUCED && now - anim.start < 1000;
+    const wantsDraw = needsDraw || needsAttnDraw || animating;
+    // Limita la animación a ~30 fps; los cambios de datos siguen entrando y
+    // se dibujan en el siguiente frame disponible.
+    if (wantsDraw && (lastDraw === 0 || now - lastDraw >= FRAME_MS)) {
+      if (needsDraw || animating) {
+        drawOverview(now);
+        drawHeatmap(now);
+        needsDraw = false;
+      }
+      if (needsAttnDraw) {
+        drawAttention();
+        needsAttnDraw = false;
+      }
+      lastDraw = now;
     }
     requestAnimationFrame(frame);
   }
@@ -1070,7 +1201,7 @@
     const key = `layer_${selectedLayer}`;
     const items = topkData[key] || [];
     const max = items.length ? Math.max(...items.map((x) => Math.abs(x[1])), 1e-6) : 1;
-    topkLayer.textContent = `capa ${selectedLayer}`;
+    topkLayer.textContent = `capa ${selectedLayer} · valor con signo`;
     topkEl.innerHTML = items.map(([idx, v]) => {
       const width = Math.max(2, Math.round(Math.abs(v) / max * 100));
       const sel = idx === selectedNeuron ? ' sel' : '';
@@ -1105,12 +1236,13 @@
     dNeuron.textContent = selectedNeuron;
     dValue.textContent = v.toFixed(3);
     const rank = (topkData[key] || []).findIndex((x) => x[0] === selectedNeuron);
-    dRank.textContent = rank >= 0 ? `#${rank + 1} de la capa` : 'fuera del Top-16';
+    dRank.textContent =
+      rank >= 0 ? `#${rank + 1} de la capa` : `fuera del Top-${META.top_k || 16}`;
     drawSpark();
   }
 
   function drawSpark() {
-    const w = sparkCanvas.width, h = sparkCanvas.height;
+    const w = canvasW(sparkCanvas), h = canvasH(sparkCanvas);
     sparkCtx.clearRect(0, 0, w, h);
     const mid = h / 2;
 
@@ -1157,25 +1289,25 @@
      ========================================================= */
   overview.addEventListener('click', (e) => {
     const r = overview.getBoundingClientRect();
-    const rowH = overview.height / META.layers;
-    const y = (e.clientY - r.top) * (overview.height / r.height);
+    const h = canvasH(overview);
+    const rowH = h / META.layers;
+    const y = (e.clientY - r.top) * (h / r.height);
     const l = Math.floor(y / rowH);
     if (l >= 0 && l < META.layers) {
-      selectedLayer = l;
-      selectedNeuron = null;
-      spark = [];
-      document.getElementById('heatmap-title').textContent =
-        `Mapa de neuronas · Capa ${l} (${META.neurons_per_layer} neuronas)`;
-      renderTopk();
-      updateDetail();
-      needsDraw = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // El servidor responde con `layer` usando las activaciones completas
+        // del último paso, sin reenviar todas las capas en cada token.
+        ws.send(JSON.stringify({ type: 'select_layer', layer: l }));
+      } else {
+        setLayer(l);
+      }
     }
   });
 
   heatmap.addEventListener('mousemove', (e) => {
     const r = heatmap.getBoundingClientRect();
-    const cx = Math.floor((e.clientX - r.left) * (heatmap.width / r.width) / CELL);
-    const cy = Math.floor((e.clientY - r.top) * (heatmap.height / r.height) / CELL);
+    const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
+    const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) {
       tooltip.style.display = 'none';
       return;
@@ -1194,8 +1326,8 @@
   heatmap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
   heatmap.addEventListener('click', (e) => {
     const r = heatmap.getBoundingClientRect();
-    const cx = Math.floor((e.clientX - r.left) * (heatmap.width / r.width) / CELL);
-    const cy = Math.floor((e.clientY - r.top) * (heatmap.height / r.height) / CELL);
+    const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
+    const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
     const i = cy * COLS + cx;
     if (cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS && i < META.neurons_per_layer) {
       selectNeuron(i);
@@ -1212,14 +1344,14 @@
     if (!btn) return;
     attnHead = parseInt(btn.dataset.head, 10);
     renderAttnHeads();
-    needsDraw = true;
+    needsAttnDraw = true;
   });
 
   attnMap.addEventListener('mousemove', (e) => {
     if (!attnMeta.available || !attnGeom) { tooltip.style.display = 'none'; return; }
     const r = attnMap.getBoundingClientRect();
-    const x = (e.clientX - r.left) * (attnMap.width / r.width);
-    const y = (e.clientY - r.top) * (attnMap.height / r.height);
+    const x = (e.clientX - r.left) * (canvasW(attnMap) / r.width);
+    const y = (e.clientY - r.top) * (canvasH(attnMap) / r.height);
     const { labelW, topPad, rowH, colW, n, H } = attnGeom;
     const head = Math.floor((y - topPad) / rowH);
     const pos = Math.floor((x - labelW) / colW);
@@ -1240,12 +1372,12 @@
   attnMap.addEventListener('click', (e) => {
     if (!attnGeom) return;
     const r = attnMap.getBoundingClientRect();
-    const y = (e.clientY - r.top) * (attnMap.height / r.height);
+    const y = (e.clientY - r.top) * (canvasH(attnMap) / r.height);
     const head = Math.floor((y - attnGeom.topPad) / attnGeom.rowH);
     if (head >= 0 && head < attnGeom.H) {
       attnHead = head;
       renderAttnHeads();
-      needsDraw = true;
+      needsAttnDraw = true;
     }
   });
 
@@ -1281,24 +1413,36 @@
     parts.push(
       `<p>El modelo <b>${escapeHtml(r.modelLabel || '—')}</b> recibió el prompt ` +
       `<b>«${escapeHtml(r.prompt)}»</b> y generó <b>${r.tokens}</b> tokens. ` +
-      `En cada token hizo una pasada completa por sus <b>${r.layers}</b> capas, ` +
-      `y cada capa tiene <b>${r.neurons}</b> neuronas MLP.</p>`
+      `Con KV cache, el prompt se procesa una vez; en cualquier caso, cada token nuevo atraviesa ` +
+      `las <b>${r.layers}</b> capas. Cada capa tiene <b>${r.neurons}</b> neuronas MLP.</p>`
     );
+
+    if (r.captureAll) {
+      parts.push(
+        `<p class="report-note">Captura completa activada: al terminar puedes elegir una capa y ` +
+        `descargar su CSV con <b>CSV capa</b>.</p>`
+      );
+    }
 
     parts.push(
       `<p><b>El proceso, en simple:</b> el prompt se parte en <b>tokens</b>; cada token se convierte ` +
       `en números y atraviesa las capas. En cada capa, la <b>atención</b> decide qué tokens anteriores ` +
       `son relevantes y la <b>MLP</b> transforma la información con sus neuronas. Al final, el modelo ` +
-      `elige el siguiente token y repite el ciclo. Por eso ves una pasada completa por cada token generado.</p>`
+      `elige el siguiente token y repite el ciclo. Por eso el heatmap se actualiza con cada token generado.</p>`
     );
 
     if (r.maxAct.value > -Infinity) {
+      const actAbs = Number.isFinite(r.maxAct.abs)
+        ? r.maxAct.abs
+        : Math.abs(r.maxAct.value);
+      const signedAct = `${r.maxAct.value > 0 ? '+' : ''}${r.maxAct.value.toFixed(3)}`;
       parts.push(
-        `<p>La <b>activación más intensa</b> apareció en la <b>capa ${r.maxAct.layer}</b>, ` +
-        `<b>neurona #${r.maxAct.neuron}</b>, con un valor de <b>${r.maxAct.value.toFixed(3)}</b>, ` +
-        `en la pasada que generó <b>«${escapeHtml(r.maxAct.token)}»</b>. ` +
-        `La capa que se encendió más en promedio fue la <b>capa ${r.maxLayerMean.layer}</b> ` +
-        `(media ${r.maxLayerMean.value.toFixed(3)}).</p>`
+        `<p>La <b>activación de mayor valor absoluto</b> apareció en la ` +
+        `<b>capa ${r.maxAct.layer}</b>, <b>neurona #${r.maxAct.neuron}</b>: ` +
+        `valor con signo <b>${signedAct}</b> (magnitud <b>${actAbs.toFixed(3)}</b>), ` +
+        `en el token <b>«${escapeHtml(r.maxAct.token)}»</b>. ` +
+        `La capa con mayor <b>media de |activación|</b> (promedio de valores absolutos) fue la ` +
+        `<b>capa ${r.maxLayerMean.layer}</b> (media <b>${r.maxLayerMean.value.toFixed(3)}</b>).</p>`
       );
     }
 
@@ -1307,18 +1451,29 @@
       parts.push(
         `<p>En <b>atención</b>, la conexión más fuerte la hizo la <b>cabeza c${a.head}</b> de la ` +
         `<b>capa ${a.layer}</b>: miró el token <b>«${escapeHtml(a.token)}»</b> con un peso de ` +
-        `<b>${(a.weight * 100).toFixed(1)}%</b> al predecir <b>«${escapeHtml(a.predicted)}»</b>.</p>`
+        `<b>${(a.weight * 100).toFixed(1)}%</b> al predecir <b>«${escapeHtml(a.predicted)}»</b>. ` +
+        `Este récord se calcula sobre las <b>top-8 conexiones por cabeza</b> que se envían, ` +
+        `no sobre la matriz de atención completa.</p>`
       );
     }
 
     if (r.sampling) {
-      const modeText = r.sampling.mode === 'greedy'
+      const isGreedy = r.sampling.mode === 'greedy';
+      const modeText = isGreedy
         ? 'siempre el token más probable (<b>greedy</b>)'
         : 'al azar entre candidatos, según su probabilidad (<b>muestreo</b>)';
+      const ngram = Number(r.sampling.no_repeat_ngram) >= 2
+        ? `prohibición de repetir secuencias de <b>${r.sampling.no_repeat_ngram}</b> tokens`
+        : 'sin filtro de n-gramas repetidos';
+      const modeNote = isGreedy
+        ? 'En greedy, top-k y top-p no intervienen en la elección.'
+        : 'Por eso, con muestreo, dos ejecuciones pueden dar textos distintos.';
       parts.push(
-        `<p>El siguiente token se eligió ${modeText}, con <b>temperature ${r.sampling.temperature}</b>, ` +
-        `<b>top-k ${r.sampling.top_k}</b> y penalización por repetición <b>${r.sampling.repetition_penalty}</b>. ` +
-        `Por eso dos ejecuciones pueden dar textos distintos.</p>`
+        `<p>El siguiente token se eligió ${modeText}. Parámetros configurados: ` +
+        `<b>temperature ${r.sampling.temperature}</b>, <b>top-k ${r.sampling.top_k}</b>, ` +
+        `<b>top-p ${r.sampling.top_p}</b>, ` +
+        `penalización por repetición <b>${r.sampling.repetition_penalty}</b> y ${ngram}. ` +
+        `${modeNote}</p>`
       );
     }
 
@@ -1335,16 +1490,21 @@
     }
 
     const sampling = r.sampling
-      ? `${r.sampling.mode === 'greedy' ? 'greedy' : 'muestreo'} · T=${r.sampling.temperature} · top-k=${r.sampling.top_k} · rep=${r.sampling.repetition_penalty}`
+      ? `${r.sampling.mode === 'greedy' ? 'greedy' : 'muestreo'} · T=${r.sampling.temperature} · ` +
+        `top-k=${r.sampling.top_k} · top-p=${r.sampling.top_p} · rep=${r.sampling.repetition_penalty} · ` +
+        `n-gram=${r.sampling.no_repeat_ngram}`
       : '—';
     const elapsed = r.elapsed ? `${r.elapsed.toFixed(1)} s` : (r.tokens ? 'en curso…' : '—');
+    const signedRecord = r.maxAct.value > -Infinity
+      ? `${r.maxAct.value > 0 ? '+' : ''}${r.maxAct.value.toFixed(2)}`
+      : '—';
 
     parts.push(
       `<div class="report-grid">` +
       `<div class="stat"><div class="k">Tokens generados</div><div class="v">${r.tokens} / ${r.requested || '—'}</div></div>` +
-      `<div class="stat"><div class="k">Capa más activa</div><div class="v">capa ${r.maxLayerMean.layer} · media ${r.maxLayerMean.value > -Infinity ? r.maxLayerMean.value.toFixed(2) : '—'}</div></div>` +
-      `<div class="stat"><div class="k">Neurona récord</div><div class="v">${r.maxAct.value > -Infinity ? `capa ${r.maxAct.layer} · #${r.maxAct.neuron} · ${r.maxAct.value.toFixed(2)}` : '—'}</div></div>` +
-      `<div class="stat"><div class="k">Atención récord</div><div class="v">${r.strongestAttn.weight > -Infinity ? `capa ${r.strongestAttn.layer} · c${r.strongestAttn.head} · ${(r.strongestAttn.weight * 100).toFixed(1)}%` : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Capa con mayor media |activación|</div><div class="v">capa ${r.maxLayerMean.layer} · media ${r.maxLayerMean.value > -Infinity ? r.maxLayerMean.value.toFixed(2) : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Neurona de mayor |activación|</div><div class="v">${r.maxAct.value > -Infinity ? `capa ${r.maxAct.layer} · #${r.maxAct.neuron} · ${signedRecord}` : '—'}</div></div>` +
+      `<div class="stat"><div class="k">Atención récord (top-8)</div><div class="v">${r.strongestAttn.weight > -Infinity ? `capa ${r.strongestAttn.layer} · c${r.strongestAttn.head} · ${(r.strongestAttn.weight * 100).toFixed(1)}%` : '—'}</div></div>` +
       `<div class="stat"><div class="k">Muestreo</div><div class="v">${escapeHtml(sampling)}</div></div>` +
       `<div class="stat"><div class="k">Tiempo de generación</div><div class="v">${elapsed}</div></div>` +
       `</div>`
@@ -1360,7 +1520,10 @@
       `<div><b>Atención</b>: mecanismo que decide a qué tokens anteriores mirar.</div>` +
       `<div><b>Cabeza</b>: canal de atención independiente dentro de una capa.</div>` +
       `<div><b>Temperature</b>: cuánto azar introduce el muestreo (más alta = más variado).</div>` +
-      `<div><b>Top-k</b>: limita la elección a los k tokens más probables.</div>` +
+      `<div><b>Top-k</b>: limita la elección a los k tokens más probables (0 = sin filtro).</div>` +
+      `<div><b>Top-p</b>: conserva los tokens más probables hasta acumular esa probabilidad (1 = sin filtro).</div>` +
+      `<div><b>N-grama</b>: prohíbe repetir secuencias de N tokens (0 o 1 = desactivado).</div>` +
+      `<div><b>KV cache</b>: estado interno que evita reprocesar el prompt en cada token.</div>` +
       `<div><b>EOS</b>: token especial que marca el final de la generación.</div>` +
       `</div>`
     );
@@ -1368,30 +1531,148 @@
     reportEl.innerHTML = parts.join('');
   }
 
+  function csvCell(value) {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function csvNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(Math.round(n * 1e6) / 1e6) : '';
+  }
+
+  function csvFilename(layer) {
+    const stamp = new Date().toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\..+$/, '')
+      .replace('T', '-');
+    const model = (report.modelKey || modelSelect.value || 'modelo')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-|-$/g, '');
+    return `activaciones-${model}-capa-${layer}-${stamp}.csv`;
+  }
+
+  async function downloadLayerCsv() {
+    const layer = selectedLayer;
+    const key = `layer_${layer}`;
+    const steps = capturedSteps.filter((item) => item.layers[key]);
+    if (!steps.length) return;
+
+    exportCsvBtn.disabled = true;
+    exportCsvBtn.textContent = 'Preparando…';
+    const parts = ['step,token,layer,neuron,activation\n'];
+    let chunk = [];
+    try {
+      for (const item of steps) {
+        const values = item.layers[key];
+        for (let i = 0; i < values.length; i++) {
+          chunk.push(
+            `${item.step},${csvCell(item.token)},${layer},${i},${csvNumber(values[i])}\n`
+          );
+          if (chunk.length >= 5000) {
+            parts.push(chunk.join(''));
+            chunk = [];
+            // Ceder el hilo mantiene la UI viva mientras se prepara el CSV.
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+      }
+      if (chunk.length) parts.push(chunk.join(''));
+
+      const blob = new Blob(parts, { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = csvFilename(layer);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      exportCsvBtn.textContent = 'CSV listo';
+    } catch (error) {
+      exportCsvBtn.textContent = 'Error';
+      exportCsvBtn.title = `No se pudo preparar el CSV: ${error.message || error}`;
+    } finally {
+      setTimeout(() => {
+        exportCsvBtn.textContent = 'CSV capa';
+        exportCsvBtn.disabled = !capturedSteps.length;
+      }, 1200);
+    }
+  }
+
   function applyStep(data) {
     prev = curr;
     curr = {};
-    for (const [key, values] of Object.entries(data.activations)) curr[key] = values;
+    const incoming = data.activations || {};
+    for (const [key, values] of Object.entries(incoming)) curr[key] = values;
     topkData = data.top || {};
     if (data.attention) attnData = data.attention;
     const text = data.delta ?? data.token ?? '';
     const tokenLabel = text.trim() ? text : '␣';
 
-    let maxAbs = 1e-6;
-    let bestAct = { value: -Infinity, layer: 0, neuron: 0 };
-    let bestLayer = { value: -Infinity, layer: 0 };
-    for (const [key, values] of Object.entries(data.activations)) {
-      const layerIdx = parseInt(key.slice(6), 10);
-      let sum = 0;
-      for (let i = 0; i < values.length; i++) {
-        const v = values[i];
-        const a = Math.abs(v);
-        sum += a;
-        if (a > maxAbs) maxAbs = a;
-        if (v > bestAct.value) bestAct = { value: v, layer: layerIdx, neuron: i };
+    const stepLayer = Number.isInteger(data.layer) ? data.layer : selectedLayer;
+    selectedLayer = clamp(stepLayer, 0, META.layers - 1);
+    document.getElementById('heatmap-title').textContent =
+      `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+
+    if (META.capture_all) {
+      const layers = {};
+      for (const [key, values] of Object.entries(incoming)) {
+        layers[key] = new Float32Array(values);
       }
-      const mean = values.length ? sum / values.length : 0;
-      if (mean > bestLayer.value) bestLayer = { value: mean, layer: layerIdx };
+      capturedSteps.push({
+        step: tokenCount + 1,
+        token: text,
+        layer: stepLayer,
+        layers,
+      });
+    }
+
+    let maxAbs = 1e-6;
+    let bestAct = { value: -Infinity, abs: -Infinity, layer: 0, neuron: 0 };
+    let bestLayer = { value: -Infinity, layer: 0 };
+    if (data.stats) {
+      // El `step` solo trae la capa visible, pero `stats` resume todas para
+      // que el informe conserve los récords globales y la capa más activa.
+      const maxAbsStats = data.stats.max_abs || {};
+      const maxSignedStats = data.stats.max_signed || maxAbsStats;
+      const absValue = Number(maxAbsStats.value);
+      if (Number.isFinite(absValue) && absValue > 0) {
+        maxAbs = absValue;
+        bestAct = {
+          value: Number.isFinite(Number(maxSignedStats.value))
+            ? Number(maxSignedStats.value)
+            : absValue,
+          abs: absValue,
+          layer: Number.isInteger(maxAbsStats.layer) ? maxAbsStats.layer : 0,
+          neuron: Number.isInteger(maxAbsStats.neuron) ? maxAbsStats.neuron : 0,
+        };
+      }
+      for (const [key, mean] of Object.entries(data.stats.layer_means || {})) {
+        const layerIdx = parseInt(key.slice(6), 10);
+        const value = Number(mean);
+        if (Number.isFinite(value) && value > bestLayer.value) {
+          bestLayer = { value, layer: layerIdx };
+        }
+      }
+    } else {
+      // Compatibilidad con el protocolo anterior: todas las capas venían en
+      // `activations`. También sirve si un servidor viejo no manda `stats`.
+      for (const [key, values] of Object.entries(incoming)) {
+        const layerIdx = parseInt(key.slice(6), 10);
+        let sum = 0;
+        for (let i = 0; i < values.length; i++) {
+          const v = values[i];
+          const a = Math.abs(v);
+          sum += a;
+          if (a > maxAbs) maxAbs = a;
+          if (a > 0 && a > bestAct.abs) {
+            bestAct = { value: v, abs: a, layer: layerIdx, neuron: i };
+          }
+        }
+        const mean = values.length ? sum / values.length : 0;
+        if (mean > bestLayer.value) bestLayer = { value: mean, layer: layerIdx };
+      }
     }
     scaleMax = maxAbs;
     scaleMaxEl.textContent = maxAbs.toFixed(2);
@@ -1399,7 +1680,9 @@
     // Informe: acumulamos los récords de toda la generación.
     if (!report.firstStepAt) report.firstStepAt = performance.now();
     report.tokens = tokenCount + 1;
-    if (bestAct.value > report.maxAct.value) report.maxAct = { ...bestAct, token: tokenLabel };
+    if (bestAct.abs > report.maxAct.abs) {
+      report.maxAct = { ...bestAct, token: tokenLabel };
+    }
     if (bestLayer.value > report.maxLayerMean.value) {
       report.maxLayerMean = { ...bestLayer, token: tokenLabel };
     }
@@ -1424,6 +1707,7 @@
 
     anim.start = performance.now();
     needsDraw = true;
+    needsAttnDraw = true;
     tokenCount++;
     chipToken.textContent = `token ${tokenCount}`;
     if (text) appendToken(text);
@@ -1510,12 +1794,30 @@
 
       if (data.type === 'meta') {
         META = { ...META, ...data };
+        report.captureAll = Boolean(data.capture_all);
+        let topK = 16;
+        if (Number.isInteger(data.top_k)) {
+          topK = data.top_k;
+        } else if (Number.isInteger(META.top_k)) {
+          topK = META.top_k;
+        }
+        META.top_k = topK;
+        overviewK.textContent = topK;
+        explainerTopK.textContent = topK;
+        if (Number.isInteger(data.selected_layer)) {
+          selectedLayer = data.selected_layer;
+        } else if (Number.isInteger(data.layer)) {
+          selectedLayer = data.layer;
+        }
         if (data.neurons_per_layer) {
-          selectedLayer = Math.min(selectedLayer, META.layers - 1);
+          selectedLayer = clamp(selectedLayer, 0, META.layers - 1);
           resizeHeatmap();
           document.getElementById('heatmap-title').textContent =
             `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
         }
+        prev = {};
+        curr = {};
+        topkData = {};
         selectedNeuron = null;
         spark = [];
         tokenCount = 0;
@@ -1529,6 +1831,7 @@
         setAttnAvailability(attnMeta.available);
         renderAttnHeads();
         report.modelLabel = data.model_label;
+        report.modelKey = data.model || modelSelect.value;
         report.layers = META.layers;
         report.neurons = META.neurons_per_layer;
         renderReport();
@@ -1541,6 +1844,17 @@
         renderTopk();
         updateDetail();
         needsDraw = true;
+        needsAttnDraw = true;
+        return;
+      }
+
+      if (data.type === 'layer') {
+        if (Number.isInteger(data.layer)) {
+          const values = Array.isArray(data.activations) && data.activations.length
+            ? data.activations
+            : undefined;
+          setLayer(data.layer, values);
+        }
         return;
       }
 
@@ -1574,6 +1888,11 @@
         report.elapsed = report.firstStepAt
           ? (performance.now() - report.firstStepAt) / 1000
           : 0;
+        exportCsvBtn.disabled = !capturedSteps.length;
+        if (capturedSteps.length) {
+          exportCsvBtn.title =
+            `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
+        }
         renderReport();
         statusEl.textContent = data.stopped === 'limit'
           ? `Generación terminada: se alcanzó el límite de ${report.requested} tokens.`
@@ -1608,8 +1927,9 @@
       mode: modeSelect.value,
       temperature: numberOr(temperatureInput, 0.8),
       top_k: numberOr(topKInput, 40),
+      top_p: numberOr(topPInput, 0.95),
       repetition_penalty: numberOr(repPenaltyInput, 1.15),
-      no_repeat_ngram: 0
+      no_repeat_ngram: numberOr(noRepeatNgramInput, 0)
     };
     promptEcho.textContent = '';
     streamEl.innerHTML = '';
@@ -1617,15 +1937,28 @@
     chipToken.textContent = 'token 0';
     attnData = { tokens: [], layers: {} };
     attnGeom = null;
+    needsAttnDraw = true;
     report = emptyReport();
     report.prompt = prompt;
     report.requested = tokens;
     report.startedAt = performance.now();
     report.sampling = params;
+    report.captureAll = captureAllInput.checked;
+    capturedSteps = [];
+    exportCsvBtn.disabled = true;
+    exportCsvBtn.textContent = 'CSV capa';
     renderReport();
 
-    ws.send(JSON.stringify({ prompt, tokens, model: modelSelect.value, params }));
+    ws.send(JSON.stringify({
+      prompt,
+      tokens,
+      model: modelSelect.value,
+      params,
+      capture_all: captureAllInput.checked,
+    }));
   }
+
+  exportCsvBtn.addEventListener('click', downloadLayerCsv);
 
   copyReportBtn.addEventListener('click', async () => {
     const text = reportEl.innerText;

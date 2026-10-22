@@ -4,7 +4,8 @@
 # Nota (CPU): para evitar las ruedas con CUDA (~3 GB) instala torch aparte:
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 #   pip install -r requirements.txt
-# El Dockerfile ya lo hace así; en ese caso pip reutiliza el torch CPU ya instalado.
+# El Dockerfile fija torch==2.14.1 desde el índice CPU; en ese caso pip reutiliza
+# el torch CPU ya instalado y no descarga ruedas CUDA.
 
 torch==2.14.1
 transformers==5.20.2

@@ -6,26 +6,32 @@ import server
 class ByteTokenizer:
     """Simula GPT-2: cada id aporta bytes y decode() reemplaza lo incompleto."""
 
-    def __init__(self, chunks):
+    def __init__(self, chunks, special_ids=None):
         self.chunks = chunks
+        self.all_special_ids = set(special_ids or ())
+        self._special_names = {5: "<|special|>"}
 
     def decode(self, ids, skip_special_tokens=True):
         data = b"".join(self.chunks.get(i, b"") for i in ids)
         return data.decode("utf-8", errors="replace")
 
+    def convert_ids_to_tokens(self, token_id):
+        return self._special_names.get(token_id, "")
+
 
 def make_tokenizer():
     return ByteTokenizer(
         {
-            1: b"\xc2",              # primera mitad de "¿"
-            2: b"\xbf",              # segunda mitad de "¿"
+            1: b"\xc2",  # primera mitad de "¿"
+            2: b"\xbf",  # segunda mitad de "¿"
             3: b"Qu",
-            4: b"\xc3\xa9",          # "é"
-            5: b"",                  # token especial
-            6: b" \xf0\x9f",         # espacio + inicio del emoji
-            7: b"\x98\x80",          # resto del emoji
+            4: b"\xc3\xa9",  # "é"
+            5: b"",  # token especial
+            6: b" \xf0\x9f",  # espacio + inicio del emoji
+            7: b"\x98\x80",  # resto del emoji
             8: b"ok",
-        }
+        },
+        special_ids={5},
     )
 
 
@@ -43,9 +49,16 @@ def test_token_labels_asigna_el_caracter_al_token_que_lo_completa():
     assert server.token_labels(tok, [1, 2, 3, 4]) == ["", "¿", "Qu", "é"]
 
 
-def test_token_labels_deja_vacio_el_token_especial():
+def test_token_labels_etiqueta_el_token_especial():
     tok = make_tokenizer()
-    assert server.token_labels(tok, [3, 5, 4]) == ["Qu", "", "é"]
+    assert server.token_labels(tok, [3, 5, 4]) == ["Qu", "<|special|>", "é"]
+
+
+def test_update_decode_state_etiqueta_el_token_especial():
+    tok = make_tokenizer()
+    state = server.update_decode_state(None, tok, [3])
+    state = server.update_decode_state(state, tok, [3, 5])
+    assert state["labels"] == ["Qu", "<|special|>"]
 
 
 def test_token_labels_con_emoji_partido():

@@ -45,9 +45,7 @@ def test_mensaje_completo_valido():
 
 def test_temperature_texto_devuelve_error_de_validacion():
     with pytest.raises(ValidationError) as info:
-        server.GenerateRequest.model_validate(
-            {"prompt": "hola", "params": {"temperature": "abc"}}
-        )
+        server.GenerateRequest.model_validate({"prompt": "hola", "params": {"temperature": "abc"}})
     message = server.validation_message(info.value)
     assert "params.temperature" in message
     assert "number" in message
@@ -71,9 +69,7 @@ def test_prompt_vacio_usa_el_default():
 
 def test_prompt_demasiado_largo_se_rechaza():
     with pytest.raises(ValidationError) as info:
-        server.GenerateRequest.model_validate(
-            {"prompt": "x" * (server.MAX_PROMPT_CHARS + 1)}
-        )
+        server.GenerateRequest.model_validate({"prompt": "x" * (server.MAX_PROMPT_CHARS + 1)})
     assert "prompt" in server.validation_message(info.value)
 
 
@@ -87,6 +83,18 @@ def test_type_desconocido_se_rechaza():
     with pytest.raises(ValidationError) as info:
         server.GenerateRequest.model_validate({"type": "select_layer"})
     assert "type" in server.validation_message(info.value)
+
+
+def test_select_layer_valido():
+    req = server.SelectLayerRequest.model_validate({"type": "select_layer", "layer": 3})
+    assert req.layer == 3
+    assert req.type == "select_layer"
+
+
+def test_select_layer_negativo_se_rechaza():
+    with pytest.raises(ValidationError) as info:
+        server.SelectLayerRequest.model_validate({"type": "select_layer", "layer": -1})
+    assert "layer" in server.validation_message(info.value)
 
 
 def test_mensaje_que_no_es_objeto_se_rechaza():

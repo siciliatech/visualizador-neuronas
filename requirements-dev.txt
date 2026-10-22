@@ -1,5 +1,6 @@
-# Dependencias de desarrollo (tests).
+# Dependencias de desarrollo (tests y lint).
 # Instala primero torch CPU para evitar las ruedas con CUDA (ver README):
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 -r requirements.txt
 pytest==9.1.1
+ruff==0.17.1

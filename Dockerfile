@@ -8,7 +8,8 @@ WORKDIR /app
 
 # Solo CPU: instalar torch desde el índice CPU reduce la imagen de ~3 GB (CUDA) a ~1.5 GB.
 COPY requirements.txt ./
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
+# Fijar la rueda CPU evita que un rebuild de hace meses baje CUDA (~3 GB).
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
  && pip install -r requirements.txt
 
 COPY server.py index.html ./
