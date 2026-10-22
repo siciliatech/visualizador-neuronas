@@ -12,7 +12,8 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-m 'not slow'"
+addopts = "-m 'not slow and not ui'"
 markers = [
     "slow: prueba de integración que carga un modelo real (no se ejecuta por defecto)",
+    "ui: prueba de frontend con navegador; requiere Chrome/Chromium y Playwright",
 ]

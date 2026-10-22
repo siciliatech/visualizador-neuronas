@@ -1,5 +1,7 @@
 """Integración real con un modelo pequeño; se ejecuta solo con `-m slow`."""
 
+import asyncio
+
 import pytest
 import torch
 
@@ -42,3 +44,46 @@ def test_gpt2_forward_con_kv_cache_real():
     assert activations2
     assert len(attention2["tokens"]) == len(context)
     assert past2 is not None
+
+
+@pytest.mark.slow
+def test_misma_semilla_repite_texto_con_muestreo_real():
+    class FakeWebSocket:
+        def __init__(self):
+            self.frames = []
+
+        async def send_json(self, data):
+            self.frames.append(data)
+
+    async def generate():
+        websocket = FakeWebSocket()
+        req = server.GenerateRequest(
+            model="gpt2",
+            prompt="La capital de Francia es",
+            tokens=5,
+            seed=1234,
+            params=server.SamplingParams(
+                mode="sample",
+                temperature=1.0,
+                top_k=0,
+                top_p=1.0,
+                repetition_penalty=1.0,
+                no_repeat_ngram=0,
+            ),
+        )
+        await server.process_generate(
+            websocket,
+            req,
+            {"selected_layer": 0, "last_activations": {}},
+        )
+        steps = [frame for frame in websocket.frames if frame["type"] == "step"]
+        done = next(frame for frame in websocket.frames if frame["type"] == "done")
+        meta = websocket.frames[0]
+        return meta["seed"], "".join(step["delta"] for step in steps), done["generated_text"]
+
+    first = asyncio.run(generate())
+    second = asyncio.run(generate())
+
+    assert first == second
+    assert first[0] == 1234
+    assert first[1] == first[2]

@@ -3,6 +3,7 @@ import gc
 import json
 import logging
 import os
+import secrets
 import time
 from pathlib import Path
 from typing import Literal
@@ -82,6 +83,15 @@ class SamplingParams(BaseModel):
     no_repeat_ngram: int = Field(default=0, ge=0, le=10)
 
 
+class AblationSpec(BaseModel):
+    """Neurona MLP que se fuerza a cero durante toda la generación."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    layer: int = Field(ge=0)
+    neuron: int = Field(ge=0)
+
+
 class GenerateRequest(BaseModel):
     """Mensaje `generate` del WebSocket, con los mismos defaults de antes."""
 
@@ -92,9 +102,16 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(default=DEFAULT_PROMPT, max_length=MAX_PROMPT_CHARS)
     tokens: int = Field(default=DEFAULT_TOKENS, ge=1, le=100)
     params: SamplingParams = Field(default_factory=SamplingParams)
+    # Semilla opcional para que una comparación (por ejemplo, una ablación)
+    # reuse exactamente la misma secuencia de números aleatorios. Si no se
+    # envía, el servidor elige una y la informa en `meta`.
+    seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
     # La UI lo activa solo cuando el usuario quiere exportar todas las capas.
     # En modo normal el step sigue enviando únicamente la capa visible.
     capture_all: bool = False
+    # Ablación opcional de una neurona MLP. Se valida contra el modelo cargado
+    # dentro de process_generate, cuando ya se conocen capas y d_mlp.
+    ablation: AblationSpec | None = None
 
     @field_validator("model")
     @classmethod
@@ -372,6 +389,22 @@ def payload_size(payload: dict) -> int:
     return len(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
 
 
+def make_ablation_hook(neuron: int):
+    """Devuelve un hook de TransformerLens que apaga una neurona MLP.
+
+    `hook_post` tiene forma [batch, posición, d_mlp]. Se clona la activación
+    para no modificar tensores que el modelo pueda reutilizar y se deja el
+    resto de neuronas intacto.
+    """
+
+    def ablate(tensor: torch.Tensor, hook) -> torch.Tensor:
+        output = tensor.clone()
+        output[..., neuron] = 0.0
+        return output
+
+    return ablate
+
+
 def forward_once(
     ids: torch.Tensor,
     model: dict,
@@ -380,6 +413,7 @@ def forward_once(
     context_ids: list[int] | None = None,
     past: object | None = None,
     use_cache: bool = False,
+    ablation: tuple[int, int] | None = None,
 ) -> tuple[torch.Tensor, dict, dict, dict, object | None]:
     bridge = model["bridge"]
     tokenizer = model["tokenizer"]
@@ -398,28 +432,44 @@ def forward_once(
         "pos_slice": -1,
     }
     forward_started = time.perf_counter()
-    with torch.no_grad():
-        if use_cache:
-            output, cache = bridge.run_with_cache(
-                ids,
-                return_type="logits_and_cache",
-                use_cache=True,
-                past_key_values=past,
-                **cache_kwargs,
-            )
-            if isinstance(output, tuple) and len(output) == 2:
-                logits, new_past = output
+    ablation_hook_point = None
+    ablation_level = None
+    if ablation is not None:
+        layer_idx, neuron_idx = ablation
+        hook_name = MLP_NEURON_HOOK.format(i=layer_idx)
+        ablation_hook_point = bridge.get_hook_point(hook_name)
+        if ablation_hook_point is None:
+            raise RuntimeError(f"No se encontró el hook de ablación {hook_name!r}.")
+        # Nivel propio para retirar solo este hook; run_with_cache usa un nivel
+        # interno distinto para sus hooks de caché.
+        ablation_level = bridge.context_level
+        ablation_hook_point.add_hook(make_ablation_hook(neuron_idx), level=ablation_level)
+    try:
+        with torch.no_grad():
+            if use_cache:
+                output, cache = bridge.run_with_cache(
+                    ids,
+                    return_type="logits_and_cache",
+                    use_cache=True,
+                    past_key_values=past,
+                    **cache_kwargs,
+                )
+                if isinstance(output, tuple) and len(output) == 2:
+                    logits, new_past = output
+                else:
+                    # El modelo ignoró `use_cache`: el siguiente paso vuelve al
+                    # forward completo.
+                    logits, new_past = output, None
             else:
-                # El modelo ignoró `use_cache`: el siguiente paso vuelve al
-                # forward completo.
-                logits, new_past = output, None
-        else:
-            logits, cache = bridge.run_with_cache(
-                ids,
-                use_cache=False,
-                **cache_kwargs,
-            )
-            new_past = None
+                logits, cache = bridge.run_with_cache(
+                    ids,
+                    use_cache=False,
+                    **cache_kwargs,
+                )
+                new_past = None
+    finally:
+        if ablation_hook_point is not None:
+            ablation_hook_point.remove_hooks(level=ablation_level)
     cache_mode = "off" if not use_cache else ("reuse" if past is not None else "prefill")
     logger.info(
         "forward modelo=%s contexto=%d entrada=%d cache=%s tiempo=%.3fs",
@@ -612,6 +662,34 @@ async def process_generate(
         session["selected_layer"] = min(max(int(session.get("selected_layer", 0)), 0), n_layers - 1)
     selected_layer = session["selected_layer"]
 
+    ablation = None
+    if req.ablation is not None:
+        if req.ablation.layer >= n_layers:
+            await send_error(
+                websocket,
+                "invalid_request",
+                f"Capa de ablación {req.ablation.layer} fuera de rango; el modelo tiene "
+                f"{n_layers} capas (0..{n_layers - 1}).",
+                recoverable=True,
+            )
+            return
+        if req.ablation.neuron >= state["neurons_per_layer"]:
+            await send_error(
+                websocket,
+                "invalid_request",
+                f"Neurona de ablación {req.ablation.neuron} fuera de rango; la capa tiene "
+                f"{state['neurons_per_layer']} neuronas "
+                f"(0..{state['neurons_per_layer'] - 1}).",
+                recoverable=True,
+            )
+            return
+        ablation = (req.ablation.layer, req.ablation.neuron)
+
+    generation_seed = req.seed
+    if generation_seed is None:
+        generation_seed = secrets.randbelow(2**31)
+    torch.manual_seed(generation_seed)
+
     tokenizer = state["tokenizer"]
     eos_ids = eos_token_ids(tokenizer)
     curr_ids = build_input_ids(tokenizer, req.prompt, spec["chat"])
@@ -622,13 +700,15 @@ async def process_generate(
     use_kv = USE_KV_CACHE
     past = None
     logger.info(
-        "generación inicio modelo=%s chat=%s contexto=%d tokens=%d capa=%d kv=%s",
+        "generación inicio modelo=%s chat=%s contexto=%d tokens=%d capa=%d kv=%s seed=%d ablación=%s",
         req.model,
         spec["chat"],
         len(seen_ids),
         req.tokens,
         selected_layer,
         use_kv,
+        generation_seed,
+        f"capa {ablation[0]} neurona {ablation[1]}" if ablation else "no",
     )
 
     # Forward de calentamiento: confirma que los hooks disparan y nos da
@@ -641,6 +721,7 @@ async def process_generate(
         context_ids=list(seen_ids),
         past=None,
         use_cache=use_kv,
+        ablation=ablation,
     )
     # Si el modelo no devolvió caché, seguimos con forwards completos.
     if use_kv and past is None:
@@ -665,6 +746,8 @@ async def process_generate(
             "neurons_per_layer": neurons,
             "top_k": TOP_K,
             "capture_all": req.capture_all,
+            "seed": generation_seed,
+            "ablation": req.ablation.model_dump() if req.ablation else None,
             "attention": {
                 "available": bool(attention["layers"]),
                 "heads": attn_heads,
@@ -747,6 +830,7 @@ async def process_generate(
                 context_ids=list(seen_ids),
                 past=past if use_kv else None,
                 use_cache=use_kv,
+                ablation=ablation,
             )
             # Si el modelo dejó de devolver caché, el siguiente paso usa el
             # contexto completo.

@@ -124,3 +124,43 @@ def test_valores_fuera_de_rango(payload, campo):
     with pytest.raises(ValidationError) as info:
         server.GenerateRequest.model_validate(payload)
     assert campo in server.validation_message(info.value)
+
+
+def test_ablation_es_opcional_y_se_valida():
+    req = server.GenerateRequest.model_validate({"prompt": "hola"})
+    assert req.ablation is None
+
+    req = server.GenerateRequest.model_validate(
+        {"prompt": "hola", "ablation": {"layer": 2, "neuron": 7}}
+    )
+    assert req.ablation is not None
+    assert req.ablation.layer == 2
+    assert req.ablation.neuron == 7
+
+
+@pytest.mark.parametrize(
+    "ablation, campo",
+    [
+        ({"layer": -1, "neuron": 0}, "layer"),
+        ({"layer": 0, "neuron": -1}, "neuron"),
+        ({"layer": 0}, "neuron"),
+        ({"layer": 0, "neuron": 0, "otra": 1}, "otra"),
+    ],
+)
+def test_ablation_invalida_se_rechaza(ablation, campo):
+    with pytest.raises(ValidationError) as info:
+        server.GenerateRequest.model_validate({"prompt": "hola", "ablation": ablation})
+    assert campo in server.validation_message(info.value)
+
+
+@pytest.mark.parametrize("seed", [-1, 2**31])
+def test_semilla_fuera_de_rango_se_rechaza(seed):
+    with pytest.raises(ValidationError) as info:
+        server.GenerateRequest.model_validate({"prompt": "hola", "seed": seed})
+    assert "seed" in server.validation_message(info.value)
+
+
+def test_semilla_valida_y_opcional():
+    assert server.GenerateRequest.model_validate({"prompt": "hola"}).seed is None
+    req = server.GenerateRequest.model_validate({"prompt": "hola", "seed": 0})
+    assert req.seed == 0

@@ -14,6 +14,7 @@ Uso:
     python scripts/smoke_ws.py --model gpt2 --tokens 3 --prompt "Hola"
     python scripts/smoke_ws.py --layer 5   # prueba select_layer
     python scripts/smoke_ws.py --capture-all  # valida el modo de exportación CSV
+    python scripts/smoke_ws.py --ablate 5:100  # apaga una neurona MLP
 
 La primera ejecución puede tardar minutos si el modelo no está descargado.
 """
@@ -53,6 +54,12 @@ def parse_args() -> argparse.Namespace:
         help="Pide todas las capas en cada step (modo exportación CSV)",
     )
     parser.add_argument(
+        "--ablate",
+        metavar="CAPA:NEURONA",
+        default=None,
+        help="Ablaciona una neurona MLP durante la generación, por ejemplo 5:100",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=900.0,
@@ -61,12 +68,26 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_ablation(value: str | None) -> tuple[int, int] | None:
+    if value is None:
+        return None
+    try:
+        layer_text, neuron_text = value.split(":", 1)
+        layer, neuron = int(layer_text), int(neuron_text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--ablate debe ser CAPA:NEURONA") from exc
+    if layer < 0 or neuron < 0:
+        raise argparse.ArgumentTypeError("--ablate no admite valores negativos")
+    return layer, neuron
+
+
 def fail(message: str) -> int:
     print(f"FALLO: {message}", file=sys.stderr)
     return 1
 
 
 async def run(args: argparse.Namespace) -> int:
+    ablation = parse_ablation(args.ablate)
     payload = {
         # El servidor actual ignora "type"; incluirlo deja el script listo
         # para el protocolo con mensajes tipados del plan de mejoras.
@@ -75,6 +96,9 @@ async def run(args: argparse.Namespace) -> int:
         "prompt": args.prompt,
         "tokens": args.tokens,
         "capture_all": args.capture_all,
+        "ablation": (
+            {"layer": ablation[0], "neuron": ablation[1]} if ablation is not None else None
+        ),
         "params": {
             "mode": "greedy",
             "temperature": 0.8,
@@ -124,6 +148,24 @@ async def run(args: argparse.Namespace) -> int:
                     return fail("meta no trae layers/neurons_per_layer")
                 if bool(data.get("capture_all")) != args.capture_all:
                     return fail("meta.capture_all no coincide con --capture-all")
+                expected_ablation = (
+                    {"layer": ablation[0], "neuron": ablation[1]} if ablation is not None else None
+                )
+                if data.get("ablation") != expected_ablation:
+                    return fail(
+                        f"meta.ablation {data.get('ablation')!r} no coincide con "
+                        f"{expected_ablation!r}"
+                    )
+                if ablation is not None:
+                    if not 0 <= ablation[0] < data["layers"]:
+                        return fail(
+                            f"--ablate capa {ablation[0]} fuera de rango (0..{data['layers'] - 1})"
+                        )
+                    if not 0 <= ablation[1] < data["neurons_per_layer"]:
+                        return fail(
+                            f"--ablate neurona {ablation[1]} fuera de rango "
+                            f"(0..{data['neurons_per_layer'] - 1})"
+                        )
 
                 initial_layer = data.get("selected_layer", data.get("layer"))
                 if not isinstance(initial_layer, int) or not (0 <= initial_layer < data["layers"]):
@@ -187,6 +229,14 @@ async def run(args: argparse.Namespace) -> int:
                                 f"step {steps}: {key} tiene "
                                 f"{len(activations[key])} neuronas, "
                                 f"se esperaban {meta['neurons_per_layer']}"
+                            )
+                    if ablation is not None:
+                        target_key = f"layer_{ablation[0]}"
+                        if target_key in activations and activations[target_key][ablation[1]] != 0:
+                            return fail(
+                                f"step {steps}: la neurona ablacionada "
+                                f"{target_key}[{ablation[1]}] no quedó en 0: "
+                                f"{activations[target_key][ablation[1]]}"
                             )
 
                     top = data.get("top") or {}

@@ -308,9 +308,11 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   solo se redibuja cuando cambia y los canvas escalan su backing store por `devicePixelRatio` (máximo
   2×) manteniendo el tamaño CSS.
 - **Tests, lint y CI:** **implementado** — `pyproject.toml` concentra la configuración de Ruff y pytest;
-  `ruff check`/`ruff format --check` pasan, la suite unitaria excluye los tests `slow` y
+  `ruff check`/`ruff format --check` pasan, la suite unitaria excluye los tests `slow` y `ui`, y
   `tests/test_integration_slow.py` valida un forward real de GPT-2 con KV cache. El workflow de GitHub
-  Actions usa Python 3.12, caché de Hugging Face, Ruff y `pytest -q -m "not slow"`.
+  Actions usa Python 3.12, caché de Hugging Face, Ruff y `pytest -q -m "not slow and not ui"`; además
+  instala Chromium y ejecuta `pytest -q -m ui`, que prueba la ablación con semilla sobre `index.html`
+  usando un WebSocket simulado, sin modelos ni FastAPI.
 - **Logging y salud:** **implementado** — se sustituyó `print` por `logging` con tiempos de carga,
   forward (contexto, entrada y modo de caché), tamaño de cada payload y errores con traza. `/health`
   informa `model_key` y `ready` sin cargar ni descargar el modelo. `VISUALIZER_LOG_LEVEL` permite ajustar
@@ -333,12 +335,23 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   pasada. **Ver diff en heatmap** reemplaza el mapa, ranking, tooltip, detalle y sparkline por el
   diferencial, con escala propia de `máx |Δ|`; **Ver heatmap actual** lo restaura. Cambiar de capa
   recalcula todo. Exige el mismo modelo.
-- **Ablación interactiva:** clic en una neurona → apagarla y ver cómo cambia el texto generado.
-- **Exportar CSV:** **implementado** — la casilla **todas las capas** activa `capture_all` en el
-  mensaje `generate`; el servidor envía entonces todas las capas en cada `step` y el cliente las guarda
-  como `Float32Array`. Al terminar, **CSV capa** descarga la capa visible con formato
-  `step,token,layer,neuron,activation` (una fila por neurona y token). El modo normal mantiene el
-  payload de una sola capa. Queda pendiente la exportación a Parquet y de todas las capas en un solo
-  archivo.
+- **Ablación interactiva:** **implementado** — tras una pasada normal, el botón **Ablar y regenerar**
+  repite el mismo modelo, prompt y parámetros con una neurona MLP forzada a `0`. El cliente envía
+  `ablation: {layer, neuron}`; el servidor valida el rango y añade un hook temporal a
+  `blocks.{layer}.mlp.hook_post` que clona la activación y apaga solo esa neurona. El hook se retira en
+  `finally` tras cada forward, también con KV cache, y la captura muestra el `0` real. El panel compara
+  el texto base con el ablacionado. Cada generación registra una semilla (`meta.seed`) y la ablación
+  reutiliza la de la base, así que con muestreo la comparación es reproducible. No es activation
+  patching y el texto puede no cambiar; para una lectura simple conviene `greedy`.
+- **Exportar activaciones:** **implementado** — la casilla **todas las capas** activa `capture_all`
+  en el mensaje `generate`; el servidor envía entonces todas las capas en cada `step` y el cliente las
+  guarda como `Float32Array`. Al terminar, **CSV capa** descarga la capa visible, **CSV todas** descarga
+  todas las capas en un único archivo con formato `step,token,layer,neuron,activation` (una fila por
+  neurona, capa y token, ordenado por capa y paso) y **Parquet** descarga todas las capas en formato
+  columnar. El Parquet se escribe en el navegador sin dependencias: un *row group*, columnas
+  `required`, `PLAIN` sin compresión y *Data Page v1*, con esquema `step INT32`,
+  `token BYTE_ARRAY (UTF8)`, `layer INT32`, `neuron INT32` y `activation FLOAT`. El modo normal
+  mantiene el payload de una sola capa. La preparación es en memoria y pide confirmación si el archivo
+  estimado supera los 2 millones de filas.
 - **Rendimiento:** el servidor mantiene un solo modelo en RAM y serializa las generaciones. Para
   paralelismo real habría que aislar el bridge/caché por conexión.

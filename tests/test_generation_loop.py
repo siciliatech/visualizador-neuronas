@@ -33,6 +33,8 @@ def run_generation(
     selected_layer=0,
     eos_token_id=99,
     capture_all=False,
+    ablation=None,
+    seed=None,
 ):
     calls = []
 
@@ -47,6 +49,7 @@ def run_generation(
                 "context": context_ids,
                 "past": past,
                 "use_cache": use_cache,
+                "ablation": kwargs.get("ablation"),
             }
         )
         n = len(calls)
@@ -97,6 +100,8 @@ def run_generation(
         prompt="hola",
         tokens=tokens,
         capture_all=capture_all,
+        ablation=ablation,
+        seed=seed,
     )
     session = {"selected_layer": selected_layer, "last_activations": {}}
 
@@ -184,8 +189,8 @@ def test_kv_cache_manda_solo_el_token_nuevo_y_conserva_el_contexto(monkeypatch):
 
 
 def test_kv_cache_no_cambia_la_salida(monkeypatch):
-    _, full = run_generation(monkeypatch, [1, 2, 3], tokens=3, use_kv=False)
-    _, kv = run_generation(monkeypatch, [1, 2, 3], tokens=3, use_kv=True)
+    _, full = run_generation(monkeypatch, [1, 2, 3], tokens=3, use_kv=False, seed=123)
+    _, kv = run_generation(monkeypatch, [1, 2, 3], tokens=3, use_kv=True, seed=123)
 
     assert kv == full
 
@@ -310,3 +315,69 @@ def test_generacion_loguea_inicio_payload_y_fin(monkeypatch, caplog):
     assert "step 1/1" in caplog.text
     assert "payload=" in caplog.text
     assert "generación fin" in caplog.text
+
+
+def test_ablacion_se_declara_en_meta_y_se_aplica_en_cada_forward(monkeypatch):
+    calls, frames = run_generation(
+        monkeypatch,
+        [1, 2],
+        tokens=2,
+        ablation={"layer": 0, "neuron": 0},
+    )
+
+    assert frames[0]["ablation"] == {"layer": 0, "neuron": 0}
+    assert [call["ablation"] for call in calls] == [(0, 0), (0, 0)]
+
+
+def test_ablacion_fuera_de_rango_devuelve_error_sin_forward(monkeypatch):
+    calls, frames = run_generation(
+        monkeypatch,
+        [1],
+        tokens=1,
+        layers=1,
+        ablation={"layer": 1, "neuron": 0},
+    )
+
+    assert calls == []
+    error = next(frame for frame in frames if frame["type"] == "error")
+    assert error["code"] == "invalid_request"
+    assert error["recoverable"] is True
+    assert "fuera de rango" in error["message"]
+
+
+def test_ablacion_de_neurona_fuera_de_rango_devuelve_error_sin_forward(monkeypatch):
+    calls, frames = run_generation(
+        monkeypatch,
+        [1],
+        tokens=1,
+        ablation={"layer": 0, "neuron": 5},
+    )
+
+    assert calls == []
+    error = next(frame for frame in frames if frame["type"] == "error")
+    assert error["code"] == "invalid_request"
+    assert error["recoverable"] is True
+    assert "neuronas" in error["message"]
+
+
+def test_meta_incluye_la_semilla_pedida(monkeypatch):
+    _, frames = run_generation(monkeypatch, [1], tokens=1, seed=12345)
+
+    assert frames[0]["seed"] == 12345
+
+
+def test_sin_semilla_el_servidor_elige_una_y_la_informa(monkeypatch):
+    monkeypatch.setattr(server.secrets, "randbelow", lambda _n: 777)
+
+    _, frames = run_generation(monkeypatch, [1], tokens=1)
+
+    assert frames[0]["seed"] == 777
+
+
+def test_la_semilla_se_aplica_antes_de_generar(monkeypatch):
+    seeds = []
+    monkeypatch.setattr(server.torch, "manual_seed", seeds.append)
+
+    run_generation(monkeypatch, [1], tokens=1, seed=99)
+
+    assert seeds == [99]

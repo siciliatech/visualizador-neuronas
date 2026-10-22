@@ -4,7 +4,9 @@ Herramienta de **interpretabilidad mecanicista**: mientras un transformer genera
 captura la activación **real de las neuronas de la MLP** de cada capa y la pinta en vivo en un heatmap
 que se envía al navegador por WebSocket.
 
-No entrena ni modifica el modelo: solo *mira hacia dentro* con **TransformerLens** y muestra lo que ve.
+No entrena ni guarda cambios en el modelo: solo *mira hacia dentro* con **TransformerLens** y muestra lo
+que ve. La ablación interactiva es una intervención temporal en memoria: apaga una neurona durante una
+generación y retira el hook al terminar.
 
 ## Cómo funciona
 
@@ -79,7 +81,7 @@ docker compose down -v         # borra también los modelos
 
 ## Desarrollo
 
-Instala las dependencias de desarrollo (incluye `pytest` y `ruff`) después de torch CPU:
+Instala las dependencias de desarrollo (incluye `pytest`, `ruff` y Playwright) después de torch CPU:
 
 ```bash
 pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
@@ -87,12 +89,19 @@ pip install -r requirements-dev.txt
 
 ruff check .
 ruff format --check .
-pytest -q                 # unitarios; excluye los marcados como slow
+pytest -q                 # unitarios; excluye slow y ui
 pytest -q -m slow         # integración real con GPT-2 (descarga/carga el modelo)
+pytest -q -m ui           # frontend con Chrome/Chromium; no carga modelos
 ```
 
 La configuración de Ruff y pytest vive en `pyproject.toml`. El test `slow` carga GPT-2 de verdad y
-comprueba el forward y la reutilización del KV cache; no se ejecuta en cada push ni en la suite normal.
+comprueba el forward y la reutilización del KV cache. El test `ui` sirve `index.html`, sustituye el
+WebSocket por un doble controlable y comprueba la ablación con semilla sin levantar FastAPI ni descargar
+modelos. Si no hay Chrome instalado, Playwright puede usar su propio Chromium:
+
+```bash
+python -m playwright install chromium
+```
 
 Para comprobar el protocolo WebSocket contra un servidor en marcha:
 
@@ -111,10 +120,17 @@ python scripts/smoke_ws.py --model gpt2 --tokens 3 --layer 5
 ```
 
 Con `--capture-all` el script comprueba además que cada `step` incluya **todas las capas** (el modo que
-usa la exportación CSV):
+usa la exportación CSV/Parquet):
 
 ```bash
 python scripts/smoke_ws.py --model gpt2 --tokens 2 --capture-all
+```
+
+Con `--ablate CAPA:NEURONA` comprueba además que `meta.ablation` coincida y que la neurona apagada
+llegue a `0` en la capa visible:
+
+```bash
+python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
 ```
 
 ## Uso
@@ -122,8 +138,8 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --capture-all
 1. Elige el **modelo** en el desplegable.
 2. Escribe un **prompt** y el número de **tokens** a generar (1–100).
 3. Ajusta el muestreo: `mode` (muestreo/greedy), `temperature`, `top_k`, `top_p`,
-   `repetition_penalty` y `no_repeat_ngram`. Si vas a exportar el CSV de varias capas, marca
-   **todas las capas** en «Exportar» antes de generar.
+   `repetition_penalty` y `no_repeat_ngram`. Si vas a exportar varias capas, marca **todas las capas**
+   en «Exportar» antes de generar.
 4. Pulsa **Generar**.
 5. En el heatmap, **clic en una fila** del overview (izquierda) para seleccionar la capa mostrada;
    pasa el ratón por el heatmap para ver capa/neurona/valor exactos.
@@ -134,14 +150,17 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --capture-all
 8. Al terminar, el **informe** explica en lenguaje claro qué pasó: capa y neurona con mayor
    |activación| (magnitud y signo), capa con mayor media de |activación|, atención más fuerte dentro
    del top-8 enviado, **todos** los parámetros de muestreo y por qué terminó la generación.
-9. Si activaste **todas las capas**, selecciona una capa y pulsa **CSV capa** para descargar sus
-   activaciones de toda la generación.
+9. Si activaste **todas las capas**, pulsa **CSV capa** para descargar la capa visible, **CSV todas**
+   para descargar todas las capas en un único CSV o **Parquet** para descargar todas las capas en formato
+   columnar.
 10. Para **comparar dos pasadas**, activa **todas las capas** en ambas, genera la primera y pulsa
     **Guardar A**; después cambia el prompt o los parámetros, vuelve a generar y pulsa **Comparar**.
     El panel muestra las 12 neuronas con mayor cambio y permite elegir entre la **media de la
     generación**, un **paso concreto por posición** o un **token coincidente por contenido**;
     **Ver diff en heatmap** lleva el diferencial al mapa principal. Ambas pasadas deben usar el mismo
     modelo.
+11. Para probar una neurona, selecciónala y pulsa **Ablar y regenerar**: se repite la pasada normal con
+    esa neurona MLP forzada a cero y el panel compara el texto base con el ablacionado.
 
 Los valores iniciales del muestreo son `temperature=0.8`, `top_k=40`, `top_p=0.95`,
 `repetition_penalty=1.15` y `no_repeat_ngram=0`. `top_p=1` desactiva el filtro nucleus;
@@ -166,24 +185,74 @@ Los canvas se dibujan a la resolución de `devicePixelRatio` (limitada a **2×**
 en pantallas 3×) y la animación se limita a **~30 fps**. Así la atención no se redibuja en cada frame y
 la vista se mantiene nítida en pantallas retina sin subir el uso de CPU.
 
-### Exportar activaciones a CSV
+### Ablar una neurona
+
+La ablación permite pasar de *ver* una neurona a *intervenirla*. Después de una generación normal,
+selecciona una neurona en el heatmap o en el ranking y pulsa **Ablar y regenerar** en el panel
+«Neurona seleccionada». La aplicación vuelve a generar **con el mismo modelo, prompt y parámetros de la
+última pasada normal**, pero fuerza a `0` esa neurona MLP en **todas las posiciones** de la generación.
+El panel de ablación muestra el texto base y el texto nuevo lado a lado, con un aviso si son idénticos
+o distintos.
+
+En el servidor, la petición `generate` incluye un campo opcional:
+
+```json
+{"ablation": {"layer": 11, "neuron": 2910}}
+```
+
+`process_generate` valida que la capa y la neurona existan para el modelo cargado. Si no, devuelve un
+`error` recuperable y no ejecuta ningún forward. Para una ablación válida, el servidor añade un hook
+temporal a `blocks.{layer}.mlp.hook_post` que clona la activación y pone a cero solo esa neurona. El
+hook se retira en un bloque `finally` después de cada forward, incluso si el modelo lanza un error, y
+se aplica tanto al *prefill* como a los tokens que reutilizan el KV cache.
+
+La captura de la pasada ablacionada es honesta: la neurona apagada aparece con valor `0` y el resto de
+las activaciones son las que produjo el modelo con esa intervención. El texto base se conserva en
+memoria del navegador; no se escribe nada en disco en el servidor. Al generar de nuevo sin ablación, el
+panel se descarta y la nueva pasada normal pasa a ser la base.
+
+Cada generación usa una **semilla**. Si el cliente no envía `seed`, el servidor elige una y la devuelve
+en `meta.seed`; la UI la guarda con la pasada normal y la reutiliza al ablacionar. Así, con muestreo, la
+comparación no mezcla dos ejecuciones independientes: la misma semilla y los mismos logits reproducen la
+misma secuencia de elecciones. La ablación cambia los logits, pero el flujo aleatorio de partida es el
+mismo. Para una lectura más simple, `greedy` sigue siendo la opción recomendada.
+
+> Una neurona individual puede no cambiar el texto: en GPT-2 hay 3.072 neuronas por capa y muchas
+> tienen un efecto pequeño o redundante. Que el texto sea idéntico **no** significa que la ablación
+> fallara. Con muestreo, la semilla registrada hace que la comparación sea reproducible; aun así,
+> `greedy` es más fácil de interpretar. La ablación apaga una neurona, no hace *activation patching* ni
+> sustituye una activación por la de otro prompt.
+
+### Exportar activaciones
 
 La generación normal envía solo la capa visible para mantener el payload pequeño. Para exportar cualquier
 capa, marca **todas las capas** antes de generar: el servidor incluirá todas las activaciones en cada
-`step`, el navegador las guarda en memoria y, al terminar, el botón **CSV capa** descarga la capa que
-estés viendo. Para otra capa, selecciónala en el overview y vuelve a descargar.
+`step`, el navegador las guarda en memoria y, al terminar, tienes tres botones:
 
-El CSV tiene una fila por neurona y token generado:
+- **CSV capa** descarga la capa que estés viendo;
+- **CSV todas** descarga todas las capas en un único CSV, ordenado por capa, paso y neurona;
+- **Parquet** descarga todas las capas en un único archivo columnar, con el mismo orden.
+
+El CSV tiene una fila por neurona, capa y token generado:
 
 ```csv
 step,token,layer,neuron,activation
 1," la",0,0,0.123
 1," la",0,1,-0.045
+1," la",1,0,0.456
 ```
 
-El nombre incluye modelo, capa y fecha. La captura vive solo en la pestaña hasta que generes de nuevo o
-la cierres; no se escribe nada en disco en el servidor. Activar todas las capas aumenta el payload de
-cada `step` (y la memoria del navegador), así que conviene usarlo solo cuando se vaya a exportar.
+El nombre incluye modelo, alcance (`capa-N` o `todas-las-capas`) y fecha. La captura vive solo en la
+pestaña hasta que generes de nuevo o la cierres; no se escribe nada en disco en el servidor. Activar
+todas las capas aumenta el payload de cada `step` y la memoria del navegador. **CSV todas** y **Parquet**
+pueden generar archivos grandes: si superan unas 2 millones de filas, la interfaz pide confirmación y
+muestra el tamaño estimado antes de prepararlos.
+
+El Parquet usa un único *row group*, columnas `required`, codificación `PLAIN` sin compresión y
+*Data Page v1*. El navegador lo genera sin librerías externas, así que no hay CDN ni dependencia nueva.
+El esquema es `step INT32`, `token BYTE_ARRAY (UTF8)`, `layer INT32`, `neuron INT32` y
+`activation FLOAT`; se puede leer con pandas, pyarrow, DuckDB o Spark. Al no comprimir, el archivo es
+mayor que un Parquet típico pero sigue siendo más compacto que el CSV completo.
 
 ### Comparar dos pasadas
 
@@ -229,7 +298,7 @@ disponible mientras el panel de comparación tiene datos.
 | `GET` | `/` | sirve `index.html` |
 | `GET` | `/models` | catálogo de modelos disponibles (JSON) |
 | `GET` | `/health` | estado del proceso sin cargar ni descargar modelos: `{"status": "ok", "model_key": "gpt2", "ready": true}`; si no hay modelo, `model_key` es `null` y `ready` es `false` |
-| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params, capture_all}` y `{type: "select_layer", layer: N}`; emite `meta` (protocolo 2, capa seleccionada y `capture_all`), `step` (delta, capa visible o todas las capas si se pidió captura, `stats` globales, `top` y atención), `layer` (respuesta al cambio de capa), `done` (texto completo, texto generado y motivo de parada), `queued` y `error` |
+| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params, seed, capture_all, ablation}` y `{type: "select_layer", layer: N}`; emite `meta` (protocolo 2, capa seleccionada, `capture_all`, `seed` y `ablation`), `step` (delta, capa visible o todas las capas si se pidió captura, `stats` globales, `top` y atención), `layer` (respuesta al cambio de capa), `done` (texto completo, texto generado y motivo de parada), `queued` y `error` |
 
 ### Logs
 
@@ -285,7 +354,10 @@ Los `step` siguientes traen solo `activations["layer_N"]`, el campo `"layer": N`
 ```
 
 Si el cliente envía `"capture_all": true`, `activations` incluye todas las capas para permitir la
-exportación CSV; `meta` repite `capture_all` para confirmar el modo.
+exportación CSV/Parquet; `meta` repite `capture_all` para confirmar el modo. El campo opcional
+`"ablation": {"layer": L, "neuron": N}` apaga esa neurona MLP durante la generación; `meta.ablation`
+repite la especificación aceptada o `null`. El campo opcional `"seed": N` fija el muestreo; si se omite,
+el servidor genera una semilla aleatoria y la publica en `meta.seed`.
 
 `top` y `attention` siguen siendo completos: el overview y la vista de atención no cambian al cambiar de
 capa. El clic en una fila del overview envía `select_layer`; mientras no llega la respuesta, el heatmap
@@ -345,11 +417,11 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
 | `server.py` | Backend FastAPI: carga del modelo, generación, captura de activaciones y WebSocket |
 | `index.html` | Frontend autocontenido (HTML+CSS+JS, canvas puro, sin dependencias) |
 | `requirements.txt` | Dependencias fijadas |
-| `requirements-dev.txt` | Dependencias de desarrollo (pytest y ruff) |
-| `pyproject.toml` | Configuración de Ruff y pytest (incluye el marcador `slow`) |
+| `requirements-dev.txt` | Dependencias de desarrollo (pytest, ruff y Playwright) |
+| `pyproject.toml` | Configuración de Ruff y pytest (marcadores `slow` y `ui`) |
 | `scripts/smoke_ws.py` | Prueba de humo del WebSocket (`meta`/`layer`/`step`/`done`) |
-| `tests/` | Tests unitarios de muestreo, truncado, decodificación incremental y tokens especiales, validación de mensajes, bucle de generación con KV cache, cambio de capa por WebSocket, `/health` y tamaño de payload; `test_integration_slow.py` carga GPT-2 real |
-| `.github/workflows/ci.yml` | CI con Python 3.12, caché de Hugging Face, Ruff y `pytest -m "not slow"` |
+| `tests/` | Tests unitarios de muestreo, truncado, decodificación incremental y tokens especiales, validación de mensajes, bucle de generación con KV cache, ablación, cambio de capa por WebSocket, `/health` y tamaño de payload; `test_integration_slow.py` carga GPT-2 real y `test_frontend_ablation.py` prueba la UI con un WebSocket simulado |
+| `.github/workflows/ci.yml` | CI con Python 3.12, caché de Hugging Face, Ruff, tests unitarios y prueba de frontend con Chromium |
 | `plan-mejoras.md` | Plan incremental de mejoras y prioridades |
 | `Dockerfile` / `docker-compose.yml` | Empaquetado con volumen para la caché de modelos |
 | `NEXT_STEPS.md` | Roadmap (Docker, TransformerLens, nnsight) y mejoras pendientes |
@@ -361,12 +433,17 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
   paralelismo real habría que aislar también el bridge/caché por conexión.
 - **Escala global:** un valor atípico en una capa puede aplanar el resto (no hay normalización por capa).
 - **Atención:** se envían las **8 conexiones más fuertes** por cabeza (no la matriz completa) para
-  mantener ligero el payload; el resto se marca con un punto y no significa atención cero. La ablación
-  interactiva sigue en el roadmap.
+  mantener ligero el payload; el resto se marca con un punto y no significa atención cero.
 - **Prompts largos:** el prompt se recorta a sus **últimos 512 tokens** para que los patrones de
   atención no consuman demasiada RAM.
 - **Exportación completa:** activar **todas las capas** aumenta el payload de cada `step` y la memoria
-  del navegador; el CSV se descarga de una capa a la vez. En modo normal no se paga ese coste.
+  del navegador. **CSV todas** y **Parquet** se preparan en memoria antes de descargarlos, así que una
+  generación larga con muchas capas puede consumir cientos de MB. En modo normal no se paga ese coste.
+  El Parquet se escribe sin compresión para no añadir dependencias al navegador.
+- **Ablación:** apaga **una** neurona MLP por generación; no hace *activation patching* ni permite
+  apagar un grupo de neuronas. El texto puede no cambiar. La comparación usa la última pasada normal
+  como base, repite su configuración y reutiliza su semilla; si cambias el prompt o los parámetros
+  después, primero genera una nueva pasada normal.
 - **Comparación:** guardar A y B conserva dos capturas completas en memoria. El modo **media** compara
   promedios por neurona; el modo **paso** compara la misma posición, aunque los tokens generados sean
   distintos; el modo **contenido** empareja texto idéntico con una subsecuencia común más larga. Los

@@ -195,8 +195,36 @@
   .detail-row { display: flex; justify-content: space-between; font-size: .82rem; color: var(--muted); padding: 2px 0; }
   .detail-row b { color: var(--text); font-family: ui-monospace, monospace; }
   #spark { width: 100%; height: auto; margin-top: 10px; background: #0b1424; border: 1px solid var(--border); border-radius: 8px; }
+  .ablation-action { width: 100%; margin-top: 10px; padding: 8px 12px; }
   .muted { color: var(--dim); font-size: .8rem; }
   .small { font-size: .67rem; margin-top: 4px; }
+
+  /* ---------- Ablación ---------- */
+  .ablation-panel { margin-top: 16px; padding: 16px; }
+  .ablation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .ablation-col {
+    min-width: 0; padding: 10px; border: 1px solid var(--border);
+    background: rgba(148, 163, 184, .05); border-radius: 10px;
+  }
+  .ablation-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .ablation-head h3 {
+    margin: 0; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--dim);
+  }
+  .ablation-text {
+    min-height: 4.5em; white-space: pre-wrap; word-break: break-word;
+    font: .88rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fde68a;
+  }
+  .ablation-text.empty { color: var(--dim); font-family: inherit; }
+  .ablation-tag {
+    padding: 2px 7px; border-radius: 999px; font: 600 .63rem ui-monospace, monospace;
+    color: var(--muted); background: rgba(148, 163, 184, .1);
+    border: 1px solid var(--border); white-space: nowrap;
+  }
+  .ablation-tag.same { color: #86efac; border-color: rgba(34, 197, 94, .35); background: rgba(34, 197, 94, .1); }
+  .ablation-tag.different { color: #fcd34d; border-color: rgba(251, 191, 36, .35); background: rgba(251, 191, 36, .1); }
+  .ablation-tag.error { color: #fca5a5; border-color: rgba(239, 68, 68, .35); background: rgba(239, 68, 68, .1); }
+  @media (max-width: 760px) { .ablation-grid { grid-template-columns: 1fr; } }
 
   /* ---------- Stream ---------- */
   .stream-panel { margin-top: 16px; padding: 16px; }
@@ -430,7 +458,7 @@
   </div>
   <div class="control">
     <label for="capture_all">Exportar</label>
-    <label class="check" title="Captura todas las capas para poder descargar el CSV de cualquiera de ellas al terminar">
+    <label class="check" title="Captura todas las capas para poder descargar cualquiera de ellas en CSV o Parquet al terminar">
       <input id="capture_all" type="checkbox"> todas las capas
     </label>
   </div>
@@ -489,6 +517,9 @@
         <div class="detail-row"><span>Ranking</span><b id="d-rank">—</b></div>
         <canvas id="spark" width="260" height="76"></canvas>
         <div class="muted small" id="spark-note">Su activación en los últimos tokens.</div>
+        <button id="ablate" class="ghost-btn ablation-action" disabled
+          title="Apagar esta neurona y regenerar con la misma configuración">Ablar y regenerar</button>
+        <div class="muted small" id="ablate-note">Selecciona una neurona para probar una ablación.</div>
       </div>
     </section>
   </aside>
@@ -539,12 +570,38 @@
   </div>
 </section>
 
+<section class="panel card ablation-panel" id="ablation-panel" hidden>
+  <div class="panel-head">
+    <h2 id="ablation-title">Ablación</h2>
+    <button id="ablation-exit" class="ghost-btn" title="Cerrar la comparación de ablación">Cerrar</button>
+  </div>
+  <div class="ablation-grid">
+    <div class="ablation-col">
+      <div class="ablation-head">
+        <h3>Sin ablación</h3>
+        <span id="ablation-before-meta" class="ablation-tag"></span>
+      </div>
+      <div id="ablation-before" class="ablation-text"></div>
+    </div>
+    <div class="ablation-col">
+      <div class="ablation-head">
+        <h3>Neurona apagada</h3>
+        <span id="ablation-after-meta" class="ablation-tag"></span>
+      </div>
+      <div id="ablation-after" class="ablation-text"></div>
+    </div>
+  </div>
+  <div class="muted small" id="ablation-summary"></div>
+</section>
+
 <section class="panel card report-panel">
   <div class="panel-head">
     <h2>Informe: ¿qué pasó en esta generación?</h2>
     <div class="report-actions">
       <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
       <button id="export-csv" class="ghost-btn" disabled title="Descargar en CSV las neuronas de la capa visible durante toda la generación (requiere activar «todas las capas» antes de generar)">CSV capa</button>
+      <button id="export-all-csv" class="ghost-btn" disabled title="Descargar todas las capas en un único CSV (requiere activar «todas las capas» antes de generar)">CSV todas</button>
+      <button id="export-parquet" class="ghost-btn" disabled title="Descargar todas las capas en Parquet (requiere activar «todas las capas» antes de generar)">Parquet</button>
       <button id="save-a" class="ghost-btn" disabled title="Guardar esta generación como A para compararla con una segunda pasada">Guardar A</button>
       <button id="compare-runs" class="ghost-btn" disabled title="Comparar A con la generación actual; requiere capturar todas las capas en ambas">Comparar</button>
     </div>
@@ -579,6 +636,7 @@
       <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus <b id="explainer-topk">16</b> neuronas con mayor activación (valor con signo, no magnitud).</li>
       <li><b>Cada token nuevo</b> recorre las capas (reutilizando el KV cache cuando está disponible): por eso el patrón cambia y se anima.</li>
       <li>Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
+      <li>Con una neurona seleccionada, <b>Ablar y regenerar</b> la apaga temporalmente y compara el texto con la última pasada normal. Una sola neurona puede no cambiar la salida.</li>
       <li>El panel de <b>atención</b> muestra las conexiones reales: a qué tokens anteriores mira cada cabeza al predecir el siguiente. Cada cabeza es un “canal” distinto.</li>
       <li>En <b>Comparación A vs B</b>, <b>Vista</b> permite comparar la media, una misma posición o tokens coincidentes por contenido; <b>Ver diff en heatmap</b> cambia el mapa, el ranking, el tooltip y el detalle a <b>Δ = B − A</b>; <b>Ver heatmap actual</b> vuelve a la activación normal.</li>
     </ul>
@@ -636,10 +694,13 @@
       maxAct: { value: -Infinity, abs: -Infinity, layer: 0, neuron: 0, token: '' },
       maxLayerMean: { value: -Infinity, layer: 0 },
       strongestAttn: { weight: -Infinity, layer: 0, head: 0, pos: 0, token: '', predicted: '' },
-      sampling: null,
+      sampling: null, ablation: null, seed: null,
     };
   }
   let report = emptyReport();
+  let pendingAblation = null;
+  let lastNormalRun = null;
+  let ablationView = null;
 
   function setLayer(layer, values) {
     // La capa solo cambia cuando el servidor confirma con `layer` o cuando
@@ -653,10 +714,7 @@
       prev[key] = values;
     }
     updateHeatmapHeading();
-    if (capturedSteps.length) {
-      exportCsvBtn.title =
-        `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
-    }
+    updateExportButtons();
     if (compareSnapshots) {
       showComparison(compareSnapshots.a, compareSnapshots.b);
     }
@@ -810,6 +868,8 @@
   const reportEl = document.getElementById('report');
   const copyReportBtn = document.getElementById('copy-report');
   const exportCsvBtn = document.getElementById('export-csv');
+  const exportAllCsvBtn = document.getElementById('export-all-csv');
+  const exportParquetBtn = document.getElementById('export-parquet');
   const saveABtn = document.getElementById('save-a');
   const compareBtn = document.getElementById('compare-runs');
   const comparePanel = document.getElementById('compare-panel');
@@ -821,6 +881,16 @@
   const heatmapHint = document.getElementById('heatmap-hint');
   const dValueLabel = document.getElementById('d-value-label');
   const sparkNote = document.getElementById('spark-note');
+  const ablateBtn = document.getElementById('ablate');
+  const ablateNote = document.getElementById('ablate-note');
+  const ablationPanel = document.getElementById('ablation-panel');
+  const ablationTitle = document.getElementById('ablation-title');
+  const ablationBefore = document.getElementById('ablation-before');
+  const ablationBeforeMeta = document.getElementById('ablation-before-meta');
+  const ablationAfter = document.getElementById('ablation-after');
+  const ablationAfterMeta = document.getElementById('ablation-after-meta');
+  const ablationSummary = document.getElementById('ablation-summary');
+  const ablationExitBtn = document.getElementById('ablation-exit');
 
   function setBadge(state, text) {
     modelBadge.className = `badge ${state}`;
@@ -1297,7 +1367,134 @@
     needsDraw = true;
   }
 
+  function updateAblationButton() {
+    const unavailableDiff = diffHeatmapActive();
+    const canAblate = Boolean(
+      selectedNeuron !== null && !running && !unavailableDiff && lastNormalRun
+    );
+    ablateBtn.disabled = !canAblate;
+    if (selectedNeuron === null) {
+      ablateNote.textContent = 'Selecciona una neurona para probar una ablación.';
+      ablateBtn.title = 'Selecciona una neurona del mapa o del ranking';
+    } else if (unavailableDiff) {
+      ablateNote.textContent = 'Sal del diff del heatmap para ablacionar una neurona real.';
+      ablateBtn.title = 'La ablación no está disponible sobre el diff';
+    } else if (!lastNormalRun) {
+      ablateNote.textContent = 'Genera una pasada normal antes de ablacionar.';
+      ablateBtn.title = 'Necesitas una pasada normal de referencia';
+    } else {
+      ablateNote.textContent =
+        `Capa ${selectedLayer} · neurona ${selectedNeuron}. Repite el prompt y el muestreo de la pasada base.`;
+      ablateBtn.title =
+        `Apagar la neurona ${selectedNeuron} de la capa ${selectedLayer} y regenerar`;
+    }
+  }
+
+  function applyRunConfig(run) {
+    if (run.modelKey) modelSelect.value = run.modelKey;
+    if (run.prompt) promptInput.value = run.prompt;
+    if (run.requested) tokensInput.value = String(run.requested);
+    const sampling = run.sampling || {};
+    if (sampling.mode) modeSelect.value = sampling.mode;
+    if (Number.isFinite(sampling.temperature)) temperatureInput.value = sampling.temperature;
+    if (Number.isFinite(sampling.top_k)) topKInput.value = sampling.top_k;
+    if (Number.isFinite(sampling.top_p)) topPInput.value = sampling.top_p;
+    if (Number.isFinite(sampling.repetition_penalty)) {
+      repPenaltyInput.value = sampling.repetition_penalty;
+    }
+    if (Number.isFinite(sampling.no_repeat_ngram)) {
+      noRepeatNgramInput.value = sampling.no_repeat_ngram;
+    }
+    // `capture_all` no cambia la generación: se respeta la elección actual
+    // para que el usuario pueda exportar la pasada ablacionada si lo desea.
+  }
+
+  function regenerateWithAblation() {
+    if (running || selectedNeuron === null || !lastNormalRun) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      statusEl.textContent = 'El WebSocket no está conectado; espera a que se reconecte.';
+      return;
+    }
+    applyRunConfig(lastNormalRun);
+    const baseline = {
+      text: lastNormalRun.text || '',
+      prompt: lastNormalRun.prompt,
+      modelKey: lastNormalRun.modelKey,
+      modelLabel: lastNormalRun.modelLabel,
+      requested: lastNormalRun.requested,
+      tokens: lastNormalRun.tokens,
+      stopped: lastNormalRun.stopped,
+      sampling: { ...(lastNormalRun.sampling || {}) },
+      captureAll: lastNormalRun.captureAll,
+      seed: lastNormalRun.seed,
+    };
+    pendingAblation = {
+      layer: selectedLayer,
+      neuron: selectedNeuron,
+      baseline,
+    };
+    ablationView = {
+      spec: { layer: selectedLayer, neuron: selectedNeuron },
+      baseline,
+      result: null,
+      error: '',
+      running: true,
+    };
+    renderAblation();
+    send();
+  }
+
+  function renderAblation() {
+    if (!ablationView) {
+      ablationPanel.hidden = true;
+      return;
+    }
+    const view = ablationView;
+    const spec = view.spec;
+    ablationPanel.hidden = false;
+    ablationTitle.textContent = `Ablación · capa ${spec.layer} · neurona ${spec.neuron}`;
+    const beforeText = view.baseline.text || '';
+    const afterText = view.result ? (view.result.text || '') : '';
+    ablationBefore.textContent = beforeText || '(sin texto)';
+    ablationBefore.classList.toggle('empty', !beforeText);
+    ablationAfter.textContent = view.result
+      ? (afterText || '(sin texto)')
+      : (view.error || 'Generando de nuevo con la neurona apagada…');
+    ablationAfter.classList.toggle('empty', !view.result && !view.error);
+    ablationBeforeMeta.textContent = view.baseline.stopped === 'eos'
+      ? 'EOS'
+      : `${view.baseline.tokens ?? 0} tokens`;
+
+    const mode = view.baseline.sampling && view.baseline.sampling.mode;
+    const seedKnown = Number.isInteger(view.baseline.seed);
+    const seedNote = seedKnown ? ` Semilla ${view.baseline.seed} reutilizada.` : '';
+    const sampleNote = mode === 'sample'
+      ? (seedKnown
+        ? seedNote
+        : ' La pasada base usó muestreo sin semilla registrada; para una comparación determinista usá modo greedy.')
+      : seedNote;
+    let tag = '';
+    if (view.error) {
+      ablationAfterMeta.textContent = 'error';
+      ablationAfterMeta.className = 'ablation-tag error';
+      tag = view.error;
+    } else if (!view.result) {
+      ablationAfterMeta.textContent = 'generando…';
+      ablationAfterMeta.className = 'ablation-tag';
+      tag = 'Misma prompt, modelo y parámetros; solo cambia la neurona apagada.' + sampleNote;
+    } else {
+      const same = view.result.text === view.baseline.text;
+      ablationAfterMeta.textContent = same ? 'texto idéntico' : 'texto distinto';
+      ablationAfterMeta.className = `ablation-tag ${same ? 'same' : 'different'}`;
+      tag = (same
+        ? 'El texto generado no cambió con la ablación.'
+        : 'El texto generado cambió con la ablación.') + sampleNote;
+    }
+    ablationSummary.textContent = tag;
+  }
+
   function updateDetail() {
+    updateAblationButton();
     if (selectedNeuron === null) {
       detailEmpty.hidden = false;
       detailBody.hidden = true;
@@ -1509,8 +1706,17 @@
 
     if (r.captureAll) {
       parts.push(
-        `<p class="report-note">Captura completa activada: al terminar puedes elegir una capa y ` +
-        `descargar su CSV con <b>CSV capa</b>.</p>`
+        `<p class="report-note">Captura completa activada: al terminar puedes descargar la capa ` +
+        `visible con <b>CSV capa</b> o las ${r.layers} capas en un único archivo con ` +
+        `<b>CSV todas</b> o <b>Parquet</b>.</p>`
+      );
+    }
+
+    if (r.ablation) {
+      parts.push(
+        `<p class="report-note">Ablación activa: la <b>neurona ${r.ablation.neuron}</b> de la ` +
+        `<b>capa ${r.ablation.layer}</b> se forzó a <b>0</b> durante toda la generación. ` +
+        `Las activaciones mostradas ya incluyen ese cambio.</p>`
       );
     }
 
@@ -1557,13 +1763,16 @@
         : 'sin filtro de n-gramas repetidos';
       const modeNote = isGreedy
         ? 'En greedy, top-k y top-p no intervienen en la elección.'
-        : 'Por eso, con muestreo, dos ejecuciones pueden dar textos distintos.';
+        : 'Por eso, con muestreo, dos ejecuciones con semillas distintas pueden dar textos distintos.';
+      const seedNote = Number.isInteger(r.seed)
+        ? ` Semilla <b>${r.seed}</b>: la ablación la reutiliza para que la comparación no dependa del azar.`
+        : '';
       parts.push(
         `<p>El siguiente token se eligió ${modeText}. Parámetros configurados: ` +
         `<b>temperature ${r.sampling.temperature}</b>, <b>top-k ${r.sampling.top_k}</b>, ` +
         `<b>top-p ${r.sampling.top_p}</b>, ` +
         `penalización por repetición <b>${r.sampling.repetition_penalty}</b> y ${ngram}. ` +
-        `${modeNote}</p>`
+        `${modeNote}${seedNote}</p>`
       );
     }
 
@@ -1582,7 +1791,8 @@
     const sampling = r.sampling
       ? `${r.sampling.mode === 'greedy' ? 'greedy' : 'muestreo'} · T=${r.sampling.temperature} · ` +
         `top-k=${r.sampling.top_k} · top-p=${r.sampling.top_p} · rep=${r.sampling.repetition_penalty} · ` +
-        `n-gram=${r.sampling.no_repeat_ngram}`
+        `n-gram=${r.sampling.no_repeat_ngram}` +
+        (Number.isInteger(r.seed) ? ` · semilla=${r.seed}` : '')
       : '—';
     const elapsed = r.elapsed ? `${r.elapsed.toFixed(1)} s` : (r.tokens ? 'en curso…' : '—');
     const signedRecord = r.maxAct.value > -Infinity
@@ -1613,6 +1823,7 @@
       `<div><b>Top-k</b>: limita la elección a los k tokens más probables (0 = sin filtro).</div>` +
       `<div><b>Top-p</b>: conserva los tokens más probables hasta acumular esa probabilidad (1 = sin filtro).</div>` +
       `<div><b>N-grama</b>: prohíbe repetir secuencias de N tokens (0 o 1 = desactivado).</div>` +
+      `<div><b>Semilla</b>: fija el azar del muestreo; la misma semilla y los mismos logits repiten la elección.</div>` +
       `<div><b>KV cache</b>: estado interno que evita reprocesar el prompt en cada token.</div>` +
       `<div><b>EOS</b>: token especial que marca el final de la generación.</div>` +
       `</div>`
@@ -1631,7 +1842,41 @@
     return Number.isFinite(n) ? String(Math.round(n * 1e6) / 1e6) : '';
   }
 
-  function csvFilename(layer) {
+  function exportRows(layers) {
+    let rows = 0;
+    for (const layer of layers) {
+      const key = `layer_${layer}`;
+      for (const item of capturedSteps) {
+        const values = item.layers[key];
+        if (values) rows += values.length;
+      }
+    }
+    return rows;
+  }
+
+  function updateExportButtons() {
+    const hasSteps = capturedSteps.length > 0 && !running;
+    exportCsvBtn.disabled = !hasSteps;
+    exportCsvBtn.title = hasSteps
+      ? `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`
+      : 'Genera con «todas las capas» activado para descargar activaciones';
+    const canAll = hasSteps && META.capture_all;
+    const allRows = canAll
+      ? exportRows(Array.from({ length: META.layers }, (_, i) => i))
+      : 0;
+    exportAllCsvBtn.disabled = !canAll;
+    exportAllCsvBtn.title = canAll
+      ? `Descargar las ${META.layers} capas en un único CSV ` +
+        `(${allRows.toLocaleString('es')} filas aprox.)`
+      : 'Requiere generar con «todas las capas» activado';
+    exportParquetBtn.disabled = !canAll;
+    exportParquetBtn.title = canAll
+      ? `Descargar las ${META.layers} capas en Parquet ` +
+        `(${allRows.toLocaleString('es')} filas aprox.)`
+      : 'Requiere generar con «todas las capas» activado';
+  }
+
+  function exportFilename(layers, extension) {
     const stamp = new Date().toISOString()
       .replace(/[-:]/g, '')
       .replace(/\..+$/, '')
@@ -1639,53 +1884,495 @@
     const model = (report.modelKey || modelSelect.value || 'modelo')
       .replace(/[^a-z0-9]+/gi, '-')
       .replace(/^-|-$/g, '');
-    return `activaciones-${model}-capa-${layer}-${stamp}.csv`;
+    const scope = layers.length === 1 ? `capa-${layers[0]}` : 'todas-las-capas';
+    return `activaciones-${model}-${scope}-${stamp}.${extension}`;
   }
 
-  async function downloadLayerCsv() {
-    const layer = selectedLayer;
-    const key = `layer_${layer}`;
-    const steps = capturedSteps.filter((item) => item.layers[key]);
-    if (!steps.length) return;
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
+  function csvFilename(layers) {
+    return exportFilename(layers, 'csv');
+  }
+
+  async function downloadCsv(layers, button) {
+    if (!capturedSteps.length || !layers.length) return;
+    const rows = exportRows(layers);
+    if (!rows) return;
+    const label = button === exportAllCsvBtn ? 'CSV todas' : 'CSV capa';
+    const stepRows = capturedSteps.map((item) => ({
+      step: item.step,
+      token: csvCell(item.token),
+      layers: item.layers,
+    }));
+
+    sendBtn.disabled = true;
     exportCsvBtn.disabled = true;
-    exportCsvBtn.textContent = 'Preparando…';
+    exportAllCsvBtn.disabled = true;
+    exportParquetBtn.disabled = true;
+    button.textContent = 'Preparando…';
+    button.title = `Preparando ${rows.toLocaleString('es')} filas…`;
     const parts = ['step,token,layer,neuron,activation\n'];
     let chunk = [];
+    let written = 0;
     try {
-      for (const item of steps) {
-        const values = item.layers[key];
-        for (let i = 0; i < values.length; i++) {
-          chunk.push(
-            `${item.step},${csvCell(item.token)},${layer},${i},${csvNumber(values[i])}\n`
-          );
-          if (chunk.length >= 5000) {
-            parts.push(chunk.join(''));
-            chunk = [];
-            // Ceder el hilo mantiene la UI viva mientras se prepara el CSV.
-            await new Promise((resolve) => setTimeout(resolve, 0));
+      for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+        const layer = layers[layerIndex];
+        const key = `layer_${layer}`;
+        if (layers.length > 1) {
+          button.textContent = `Capa ${layerIndex + 1}/${layers.length}`;
+        }
+        for (const item of stepRows) {
+          const values = item.layers[key];
+          if (!values) continue;
+          for (let i = 0; i < values.length; i++) {
+            chunk.push(
+              `${item.step},${item.token},${layer},${i},${csvNumber(values[i])}\n`
+            );
+            if (chunk.length >= 5000) {
+              written += chunk.length;
+              parts.push(chunk.join(''));
+              chunk = [];
+              button.title =
+                `${written.toLocaleString('es')} de ${rows.toLocaleString('es')} filas…`;
+              // Ceder el hilo mantiene la UI viva mientras se prepara el CSV.
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
           }
         }
       }
       if (chunk.length) parts.push(chunk.join(''));
 
       const blob = new Blob(parts, { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = csvFilename(layer);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      exportCsvBtn.textContent = 'CSV listo';
+      saveBlob(blob, csvFilename(layers));
+      button.textContent = 'CSV listo';
     } catch (error) {
-      exportCsvBtn.textContent = 'Error';
-      exportCsvBtn.title = `No se pudo preparar el CSV: ${error.message || error}`;
+      button.textContent = 'Error';
+      button.title = `No se pudo preparar el CSV: ${error.message || error}`;
     } finally {
+      sendBtn.disabled = running;
       setTimeout(() => {
-        exportCsvBtn.textContent = 'CSV capa';
-        exportCsvBtn.disabled = !capturedSteps.length;
+        button.textContent = label;
+        updateExportButtons();
+      }, 1200);
+    }
+  }
+
+  async function downloadLayerCsv() {
+    await downloadCsv([selectedLayer], exportCsvBtn);
+  }
+
+  async function downloadAllLayersCsv() {
+    if (!META.capture_all) return;
+    const layers = Array.from({ length: META.layers }, (_, i) => i);
+    const rows = exportRows(layers);
+    if (!rows) return;
+    if (rows > 2_000_000) {
+      const megabytes = Math.round(rows * 30 / (1024 * 1024));
+      const ok = window.confirm(
+        `El CSV tendrá unas ${rows.toLocaleString('es')} filas (≈ ${megabytes} MB) y puede ` +
+        'consumir mucha memoria en la pestaña. ¿Continuar?'
+      );
+      if (!ok) return;
+    }
+    await downloadCsv(layers, exportAllCsvBtn);
+  }
+
+  /* =========================================================
+     Parquet: escritor mínimo sin dependencias externas.
+
+     El archivo usa un único row group, columnas required, PLAIN
+     sin compresión y Data Page v1. Así el navegador puede generar
+     un Parquet válido sin cargar una librería de varios MB.
+     ========================================================= */
+  const THRIFT = {
+    STOP: 0, BOOL_TRUE: 1, BOOL_FALSE: 2, BYTE: 3, I16: 4, I32: 5,
+    I64: 6, DOUBLE: 7, STRING: 8, LIST: 9, SET: 10, MAP: 11, STRUCT: 12,
+  };
+  const PARQUET = {
+    INT32: 1, FLOAT: 4, BYTE_ARRAY: 6, UTF8: 0,
+    REQUIRED: 0, PLAIN: 0, RLE: 3, UNCOMPRESSED: 0, DATA_PAGE: 0,
+  };
+  const textEncoder = new TextEncoder();
+  const parquetMagic = new Uint8Array([80, 65, 82, 49]);
+
+  class ThriftCompact {
+    constructor() {
+      this.bytes = [];
+      this.last = 0;
+      this.stack = [];
+    }
+
+    startStruct() {
+      this.stack.push(this.last);
+      this.last = 0;
+    }
+
+    endStruct() {
+      this.byte(0);
+      const previous = this.stack.pop();
+      this.last = previous === undefined ? 0 : previous;
+    }
+
+    byte(value) {
+      this.bytes.push(value & 0xff);
+    }
+
+    varint(value) {
+      let current = value >>> 0;
+      while (current >= 0x80) {
+        this.byte((current & 0x7f) | 0x80);
+        current >>>= 7;
+      }
+      this.byte(current);
+    }
+
+    zigzag32(value) {
+      const current = value | 0;
+      this.varint(((current << 1) ^ (current >> 31)) >>> 0);
+    }
+
+    zigzag64(value) {
+      let current = (BigInt(value) << 1n) ^ (BigInt(value) >> 63n);
+      while (current >= 0x80n) {
+        this.byte(Number(current & 0x7fn) | 0x80);
+        current >>= 7n;
+      }
+      this.byte(Number(current));
+    }
+
+    field(id, type) {
+      const delta = id - this.last;
+      if (delta > 0 && delta <= 15) {
+        this.byte((delta << 4) | type);
+      } else {
+        this.byte(type);
+        this.zigzag32(id);
+      }
+      this.last = id;
+    }
+
+    i32(value) {
+      this.zigzag32(value);
+    }
+
+    i64(value) {
+      this.zigzag64(value);
+    }
+
+    string(value) {
+      const data = textEncoder.encode(String(value));
+      this.varint(data.length);
+      for (let i = 0; i < data.length; i++) this.bytes.push(data[i]);
+    }
+
+    listHeader(size, type) {
+      if (size < 15) {
+        this.byte((size << 4) | type);
+      } else {
+        this.byte(0xf0 | type);
+        this.varint(size);
+      }
+    }
+
+    toUint8Array() {
+      return new Uint8Array(this.bytes);
+    }
+  }
+
+  function parquetSchemaElement(writer, element) {
+    writer.startStruct();
+    if (element.type !== undefined) {
+      writer.field(1, THRIFT.I32);
+      writer.i32(element.type);
+    }
+    if (element.repetition !== undefined) {
+      writer.field(3, THRIFT.I32);
+      writer.i32(element.repetition);
+    }
+    writer.field(4, THRIFT.STRING);
+    writer.string(element.name);
+    if (element.numChildren !== undefined) {
+      writer.field(5, THRIFT.I32);
+      writer.i32(element.numChildren);
+    }
+    if (element.converted !== undefined) {
+      writer.field(6, THRIFT.I32);
+      writer.i32(element.converted);
+    }
+    writer.endStruct();
+  }
+
+  function parquetColumnMeta(writer, column) {
+    writer.startStruct();
+    writer.field(1, THRIFT.I32);
+    writer.i32(column.type);
+    writer.field(2, THRIFT.LIST);
+    writer.listHeader(2, THRIFT.I32);
+    writer.i32(PARQUET.PLAIN);
+    writer.i32(PARQUET.RLE);
+    writer.field(3, THRIFT.LIST);
+    writer.listHeader(1, THRIFT.STRING);
+    writer.string(column.name);
+    writer.field(4, THRIFT.I32);
+    writer.i32(PARQUET.UNCOMPRESSED);
+    writer.field(5, THRIFT.I64);
+    writer.i64(column.count);
+    writer.field(6, THRIFT.I64);
+    writer.i64(column.size);
+    writer.field(7, THRIFT.I64);
+    writer.i64(column.size);
+    writer.field(9, THRIFT.I64);
+    writer.i64(column.offset);
+    writer.endStruct();
+  }
+
+  function parquetDataPage(rows, body) {
+    const header = new ThriftCompact();
+    header.startStruct();
+    header.field(1, THRIFT.I32);
+    header.i32(PARQUET.DATA_PAGE);
+    header.field(2, THRIFT.I32);
+    header.i32(body.length);
+    header.field(3, THRIFT.I32);
+    header.i32(body.length);
+    header.field(5, THRIFT.STRUCT);
+    header.startStruct();
+    header.field(1, THRIFT.I32);
+    header.i32(rows);
+    header.field(2, THRIFT.I32);
+    header.i32(PARQUET.PLAIN);
+    header.field(3, THRIFT.I32);
+    header.i32(PARQUET.RLE);
+    header.field(4, THRIFT.I32);
+    header.i32(PARQUET.RLE);
+    header.endStruct();
+    header.endStruct();
+    return header.toUint8Array();
+  }
+
+  function parquetFooter(rows, columns, totalSize) {
+    const writer = new ThriftCompact();
+    const leaves = [
+      { type: PARQUET.INT32, repetition: PARQUET.REQUIRED, name: 'step' },
+      {
+        type: PARQUET.BYTE_ARRAY, repetition: PARQUET.REQUIRED,
+        name: 'token', converted: PARQUET.UTF8,
+      },
+      { type: PARQUET.INT32, repetition: PARQUET.REQUIRED, name: 'layer' },
+      { type: PARQUET.INT32, repetition: PARQUET.REQUIRED, name: 'neuron' },
+      { type: PARQUET.FLOAT, repetition: PARQUET.REQUIRED, name: 'activation' },
+    ];
+
+    writer.startStruct();
+    writer.field(1, THRIFT.I32);
+    writer.i32(1);
+    writer.field(2, THRIFT.LIST);
+    writer.listHeader(leaves.length + 1, THRIFT.STRUCT);
+    parquetSchemaElement(writer, {
+      name: 'schema', numChildren: leaves.length, repetition: PARQUET.REQUIRED,
+    });
+    for (const leaf of leaves) parquetSchemaElement(writer, leaf);
+
+    writer.field(3, THRIFT.I64);
+    writer.i64(rows);
+    writer.field(4, THRIFT.LIST);
+    writer.listHeader(1, THRIFT.STRUCT);
+    writer.startStruct();
+    writer.field(1, THRIFT.LIST);
+    writer.listHeader(columns.length, THRIFT.STRUCT);
+    for (const column of columns) {
+      writer.startStruct();
+      // file_offset queda en 0: los metadatos viven en el footer, como en pyarrow.
+      writer.field(2, THRIFT.I64);
+      writer.i64(0);
+      writer.field(3, THRIFT.STRUCT);
+      parquetColumnMeta(writer, column);
+      writer.endStruct();
+    }
+    writer.field(2, THRIFT.I64);
+    writer.i64(totalSize);
+    writer.field(3, THRIFT.I64);
+    writer.i64(rows);
+    writer.endStruct();
+
+    writer.field(6, THRIFT.STRING);
+    writer.string('visualizador-neuronas');
+    writer.endStruct();
+    return writer.toUint8Array();
+  }
+
+  function ensureCompleteLayers(layers) {
+    for (const layer of layers) {
+      const key = `layer_${layer}`;
+      for (const item of capturedSteps) {
+        const values = item.layers[key];
+        if (!values || values.length !== META.neurons_per_layer) {
+          throw new Error(`Falta la capa ${layer} en el paso ${item.step}.`);
+        }
+      }
+    }
+  }
+
+  function forEachExportRow(layers, callback) {
+    for (const layer of layers) {
+      const key = `layer_${layer}`;
+      for (let stepIndex = 0; stepIndex < capturedSteps.length; stepIndex++) {
+        const item = capturedSteps[stepIndex];
+        const values = item.layers[key];
+        for (let i = 0; i < values.length; i++) {
+          callback(layer, item, stepIndex, i, values[i]);
+        }
+      }
+    }
+  }
+
+  function parquetInt32Body(layers, rows, getter) {
+    const buffer = new ArrayBuffer(rows * 4);
+    const view = new DataView(buffer);
+    let offset = 0;
+    forEachExportRow(layers, (layer, item, stepIndex, i, value) => {
+      view.setInt32(offset, getter(layer, item, stepIndex, i, value), true);
+      offset += 4;
+    });
+    if (offset !== rows * 4) throw new Error('El número de filas Parquet no coincide.');
+    return new Uint8Array(buffer);
+  }
+
+  function parquetFloat32Body(layers, rows) {
+    const buffer = new ArrayBuffer(rows * 4);
+    const view = new DataView(buffer);
+    let offset = 0;
+    forEachExportRow(layers, (layer, item, stepIndex, i, value) => {
+      view.setFloat32(offset, value, true);
+      offset += 4;
+    });
+    if (offset !== rows * 4) throw new Error('El número de filas Parquet no coincide.');
+    return new Uint8Array(buffer);
+  }
+
+  function parquetTokenBody(layers) {
+    const tokens = capturedSteps.map((item) => textEncoder.encode(String(item.token ?? '')));
+    let size = 0;
+    for (let stepIndex = 0; stepIndex < capturedSteps.length; stepIndex++) {
+      const tokenSize = 4 + tokens[stepIndex].length;
+      for (const layer of layers) {
+        const values = capturedSteps[stepIndex].layers[`layer_${layer}`];
+        size += values.length * tokenSize;
+      }
+    }
+    const buffer = new ArrayBuffer(size);
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    let offset = 0;
+    forEachExportRow(layers, (layer, item, stepIndex) => {
+      const token = tokens[stepIndex];
+      view.setUint32(offset, token.length, true);
+      offset += 4;
+      bytes.set(token, offset);
+      offset += token.length;
+    });
+    if (offset !== size) throw new Error('El número de bytes Parquet no coincide.');
+    return bytes;
+  }
+
+  async function makeParquet(layers, onProgress) {
+    ensureCompleteLayers(layers);
+    const rows = exportRows(layers);
+    if (!rows) throw new Error('No hay activaciones para exportar.');
+    const specs = [
+      {
+        name: 'step', type: PARQUET.INT32,
+        build: () => parquetInt32Body(layers, rows, (layer, item) => item.step),
+      },
+      {
+        name: 'token', type: PARQUET.BYTE_ARRAY,
+        build: () => parquetTokenBody(layers),
+      },
+      {
+        name: 'layer', type: PARQUET.INT32,
+        build: () => parquetInt32Body(layers, rows, (layer) => layer),
+      },
+      {
+        name: 'neuron', type: PARQUET.INT32,
+        build: () => parquetInt32Body(layers, rows, (layer, item, stepIndex, i) => i),
+      },
+      {
+        name: 'activation', type: PARQUET.FLOAT,
+        build: () => parquetFloat32Body(layers, rows),
+      },
+    ];
+
+    const parts = [parquetMagic];
+    const columns = [];
+    let offset = 4;
+    for (let i = 0; i < specs.length; i++) {
+      const spec = specs[i];
+      const body = spec.build();
+      const header = parquetDataPage(rows, body);
+      parts.push(header, body);
+      columns.push({
+        name: spec.name,
+        type: spec.type,
+        count: rows,
+        size: header.length + body.length,
+        offset,
+      });
+      offset += header.length + body.length;
+      if (onProgress) onProgress(i + 1, specs.length);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const footer = parquetFooter(rows, columns, offset - 4);
+    const footerLength = new Uint8Array(4);
+    new DataView(footerLength.buffer).setUint32(0, footer.length, true);
+    parts.push(footer, footerLength, parquetMagic);
+    return new Blob(parts, { type: 'application/vnd.apache.parquet' });
+  }
+
+  async function downloadParquet() {
+    if (!META.capture_all) return;
+    const layers = Array.from({ length: META.layers }, (_, i) => i);
+    const rows = exportRows(layers);
+    if (!rows) return;
+    if (rows > 2_000_000) {
+      const megabytes = Math.round(rows * 20 / (1024 * 1024));
+      const ok = window.confirm(
+        `El Parquet tendrá unas ${rows.toLocaleString('es')} filas (≈ ${megabytes} MB sin ` +
+        'comprimir) y puede consumir mucha memoria en la pestaña. ¿Continuar?'
+      );
+      if (!ok) return;
+    }
+
+    sendBtn.disabled = true;
+    exportCsvBtn.disabled = true;
+    exportAllCsvBtn.disabled = true;
+    exportParquetBtn.disabled = true;
+    exportParquetBtn.textContent = 'Preparando…';
+    exportParquetBtn.title = `Preparando ${rows.toLocaleString('es')} filas…`;
+    try {
+      const blob = await makeParquet(layers, (done, total) => {
+        exportParquetBtn.textContent = `Columna ${done}/${total}`;
+        exportParquetBtn.title = `Preparando Parquet: columna ${done} de ${total}…`;
+      });
+      saveBlob(blob, exportFilename(layers, 'parquet'));
+      exportParquetBtn.textContent = 'Parquet listo';
+    } catch (error) {
+      exportParquetBtn.textContent = 'Error';
+      exportParquetBtn.title = `No se pudo preparar el Parquet: ${error.message || error}`;
+    } finally {
+      sendBtn.disabled = running;
+      setTimeout(() => {
+        exportParquetBtn.textContent = 'Parquet';
+        updateExportButtons();
       }, 1200);
     }
   }
@@ -1699,6 +2386,8 @@
       tokens: capturedSteps.length,
       layers: report.layers || META.layers,
       neurons: report.neurons || META.neurons_per_layer,
+      ablation: report.ablation,
+      seed: report.seed,
       steps: capturedSteps.slice(),
     };
   }
@@ -2252,15 +2941,22 @@
         setBadge('idle', 'sin cargar');
       }
       sendBtn.disabled = false;
+      updateAblationButton();
     };
     ws.onclose = () => {
       running = false;
       caret.style.display = 'none';
+      if (report.ablation && ablationView && ablationView.running) {
+        ablationView.running = false;
+        ablationView.error = 'Se perdió la conexión durante la ablación.';
+        renderAblation();
+      }
       statusEl.textContent = lastErrorMessage
         ? `${lastErrorMessage} (reconectando…)`
         : 'Desconectado. Reintentando…';
       setBadge('error', 'desconectado');
       sendBtn.disabled = true;
+      updateAblationButton();
       clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connect, 2000);
     };
@@ -2285,6 +2981,12 @@
         caret.style.display = 'none';
         setBadge('error', 'error');
         statusEl.textContent = lastErrorMessage;
+        if (report.ablation && ablationView) {
+          ablationView.running = false;
+          ablationView.error = lastErrorMessage;
+          renderAblation();
+        }
+        updateAblationButton();
         return;
       }
 
@@ -2298,6 +3000,7 @@
       if (data.type === 'meta') {
         META = { ...META, ...data };
         report.captureAll = Boolean(data.capture_all);
+        report.seed = Number.isInteger(data.seed) ? data.seed : null;
         let topK = 16;
         if (Number.isInteger(data.top_k)) {
           topK = data.top_k;
@@ -2322,6 +3025,12 @@
         curr = {};
         topkData = {};
         selectedNeuron = null;
+        // En una ablación conservamos la neurona elegida para que el detalle
+        // muestre su valor real (0) mientras se regenera.
+        if (data.ablation && ablationView) {
+          selectedLayer = data.ablation.layer;
+          selectedNeuron = data.ablation.neuron;
+        }
         spark = [];
         tokenCount = 0;
         chipToken.textContent = 'token 0';
@@ -2392,11 +3101,30 @@
         report.elapsed = report.firstStepAt
           ? (performance.now() - report.firstStepAt) / 1000
           : 0;
-        exportCsvBtn.disabled = !capturedSteps.length;
-        if (capturedSteps.length) {
-          exportCsvBtn.title =
-            `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
+        if (report.ablation && ablationView) {
+          ablationView.running = false;
+          ablationView.result = {
+            text: streamEl.textContent,
+            tokens: report.tokens,
+            stopped: report.stopped,
+          };
+          renderAblation();
+        } else if (!report.ablation) {
+          lastNormalRun = {
+            text: streamEl.textContent,
+            modelKey: report.modelKey,
+            modelLabel: report.modelLabel,
+            prompt: report.prompt,
+            requested: report.requested,
+            tokens: report.tokens,
+            stopped: report.stopped,
+            sampling: { ...(report.sampling || {}) },
+            captureAll: report.captureAll,
+            seed: report.seed,
+          };
         }
+        updateAblationButton();
+        updateExportButtons();
         updateCompareControls();
         renderReport();
         statusEl.textContent = data.stopped === 'limit'
@@ -2419,6 +3147,8 @@
 
   function send() {
     if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
+    const ablation = pendingAblation;
+    pendingAblation = null;
     lastErrorMessage = '';
     running = true;
     runSerial += 1;
@@ -2429,6 +3159,9 @@
 
     const prompt = promptInput.value.trim() || 'Hola';
     const tokens = Math.max(1, Math.min(100, parseInt(tokensInput.value || '40', 10)));
+    const seed = ablation && Number.isInteger(ablation.baseline.seed)
+      ? ablation.baseline.seed
+      : null;
     const params = {
       mode: modeSelect.value,
       temperature: numberOr(temperatureInput, 0.8),
@@ -2450,9 +3183,23 @@
     report.startedAt = performance.now();
     report.sampling = params;
     report.captureAll = captureAllInput.checked;
+    report.ablation = ablation
+      ? { layer: ablation.layer, neuron: ablation.neuron }
+      : null;
+    if (!ablation) {
+      ablationView = null;
+      renderAblation();
+    } else if (ablationView) {
+      ablationView.running = true;
+      ablationView.result = null;
+      ablationView.error = '';
+      renderAblation();
+    }
     capturedSteps = [];
-    exportCsvBtn.disabled = true;
     exportCsvBtn.textContent = 'CSV capa';
+    exportAllCsvBtn.textContent = 'CSV todas';
+    exportParquetBtn.textContent = 'Parquet';
+    updateExportButtons();
     saveABtn.textContent = 'Guardar A';
     clearComparison();
     updateCompareControls();
@@ -2464,10 +3211,19 @@
       model: modelSelect.value,
       params,
       capture_all: captureAllInput.checked,
+      seed,
+      ablation: ablation ? { layer: ablation.layer, neuron: ablation.neuron } : null,
     }));
   }
 
   exportCsvBtn.addEventListener('click', downloadLayerCsv);
+  exportAllCsvBtn.addEventListener('click', downloadAllLayersCsv);
+  exportParquetBtn.addEventListener('click', downloadParquet);
+  ablateBtn.addEventListener('click', regenerateWithAblation);
+  ablationExitBtn.addEventListener('click', () => {
+    ablationView = null;
+    renderAblation();
+  });
   saveABtn.addEventListener('click', saveSnapshotA);
   compareBtn.addEventListener('click', compareCurrent);
   compareExitBtn.addEventListener('click', clearComparison);
