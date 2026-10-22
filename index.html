@@ -91,6 +91,14 @@
   }
   .control input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
   .control.grow { flex: 1 1 300px; }
+  .shape-picker { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+  .shape-picker label {
+    font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--dim);
+  }
+  .shape-picker select {
+    padding: 3px 6px; font-size: .74rem; border-radius: 6px; color: var(--text);
+    background: rgba(15, 23, 42, .8); border: 1px solid var(--border);
+  }
   .label-row { display: flex; align-items: center; gap: 5px; }
   .help {
     width: 16px; height: 16px; padding: 0; flex: 0 0 auto; cursor: pointer;
@@ -345,6 +353,14 @@
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-bottom: 8px; min-height: 24px;
   }
+  .h-with-help { display: inline-flex; align-items: center; gap: 8px; }
+  .attn-intro { margin: 0 0 8px; font-size: .86rem; line-height: 1.5; color: var(--muted); }
+  .attn-intro b { color: #c4b5fd; font-weight: 700; }
+  .attn-reading {
+    margin: 0 0 12px; padding: 8px 12px; font-size: .84rem; line-height: 1.45; color: #ddd6fe;
+    border-left: 3px solid #a78bfa; background: rgba(139, 92, 246, .1); border-radius: 0 8px 8px 0;
+  }
+  .attn-reading:empty { display: none; }
   .attn-sub-title {
     font-size: .68rem; letter-spacing: .06em; text-transform: uppercase;
     color: var(--dim); font-weight: 700;
@@ -518,6 +534,15 @@
     <div class="panel-head">
       <h2 id="heatmap-title">Mapa de neuronas · Capa 0</h2>
       <span class="hint" id="heatmap-hint">cada celda = una neurona</span>
+      <span class="shape-picker">
+        <label for="heatmap-shape">Forma</label>
+        <select id="heatmap-shape" title="Solo cambia el dibujo: la posición de cada neurona es arbitraria">
+          <option value="grid" selected>cuadrícula</option>
+          <option value="brain">cerebro</option>
+          <option value="chip">chip</option>
+        </select>
+        <button type="button" class="help" data-help="shape" aria-label="Ayuda: Forma" aria-expanded="false">?</button>
+      </span>
     </div>
     <canvas id="heatmap" width="768" height="576"></canvas>
     <div class="legend">
@@ -561,32 +586,39 @@
 
 <section class="panel card attn-panel">
   <div class="panel-head">
-    <h2>Atención: a qué mira el token</h2>
-    <span class="hint" id="attn-hint">top-8 por cabeza · el resto no se dibuja</span>
+    <h2 class="h-with-help">Atención: en qué palabras se fija el modelo <button type="button" class="help" data-help="attn" aria-label="Ayuda: Atención" aria-expanded="false">?</button></h2>
+    <span class="hint" id="attn-hint">solo se dibujan las 8 conexiones más fuertes de cada cabeza</span>
   </div>
+  <p class="attn-intro">
+    Para escribir la siguiente palabra, el modelo <b>repasa lo que ya está escrito</b> y se fija más en
+    unas palabras que en otras, como cuando subrayás las partes importantes de un texto. Eso es la
+    <b>atención</b>. Cada <b>cabeza</b> es un «ayudante» que se fija en cosas distintas (el sujeto, la
+    palabra anterior, el tema…).
+  </p>
+  <p class="attn-reading" id="attn-reading" aria-live="polite"></p>
   <div class="attn-grid">
     <div class="attn-col">
       <div class="attn-sub">
-        <span class="attn-sub-title">Cabeza de atención</span>
+        <span class="attn-sub-title">1 · Elige un ayudante (cabeza) <button type="button" class="help" data-help="attn_head" aria-label="Ayuda: Cabeza de atención" aria-expanded="false">?</button></span>
         <div class="attn-heads" id="attn-heads"></div>
       </div>
       <canvas id="attnfan" width="760" height="210"></canvas>
       <div class="attn-legend">
-        <span>0</span><span class="attn-gradient"></span><span>peso de atención</span>
-        <span class="attn-note">top-8 por cabeza</span>
+        <span>poco</span><span class="attn-gradient"></span><span>mucho</span>
+        <span class="attn-note">línea más gruesa = se fija más</span>
       </div>
-      <div class="muted small">Cada línea une el token que predice con sus 8 conexiones más fuertes. Grosor = peso de atención; el resto no se dibuja.</div>
+      <div class="muted small">Arriba, las palabras anteriores en las que más se fija este ayudante. Abajo, la última palabra escrita, desde la que el modelo decide qué viene. El porcentaje indica cuánta atención recibe cada una.</div>
     </div>
     <div class="attn-col">
       <div class="attn-sub">
-        <span class="attn-sub-title">Todas las cabezas · capa <b id="attn-layer">0</b></span>
+        <span class="attn-sub-title">2 · Todos los ayudantes de la capa <b id="attn-layer">0</b> <button type="button" class="help" data-help="attn_map" aria-label="Ayuda: Resumen de todas las cabezas" aria-expanded="false">?</button></span>
       </div>
       <canvas id="attnmap" width="760" height="230"></canvas>
       <div class="attn-legend">
-        <span>0</span><span class="attn-gradient"></span><span>1</span>
-        <span class="attn-note"><i class="attn-dot"></i>fuera del top-8</span>
+        <span>poco</span><span class="attn-gradient"></span><span>mucho</span>
+        <span class="attn-note"><i class="attn-dot"></i>no está entre las 8 más fuertes</span>
       </div>
-      <div class="muted small">Filas = cabezas · columnas = tokens · brillo = atención. Las celdas con un punto quedan fuera del top-8 y no significan atención cero.</div>
+      <div class="muted small">Cada fila es un ayudante y cada columna una palabra del texto. Cuanto más brillante la celda, más se fija ahí. Un punto tenue no significa «cero»: solo que esa palabra no entró entre las 8 más fuertes.</div>
     </div>
   </div>
   <div id="attn-empty" class="muted" hidden>
@@ -687,6 +719,7 @@
   let COLS = 64;              // se recalcula por modelo
   let ROWS = 48;
   const CELL = 12;
+  let cellIndex = new Int32Array(0);
 
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -858,6 +891,7 @@
   const heatmap = document.getElementById('heatmap');
   const octx = overview.getContext('2d');
   const hctx = heatmap.getContext('2d');
+  const heatmapShapeEl = document.getElementById('heatmap-shape');
   const statusEl = document.getElementById('status');
   const streamEl = document.getElementById('stream');
   const promptEcho = document.getElementById('prompt-echo');
@@ -899,6 +933,7 @@
   const attnMapCtx = attnMap.getContext('2d');
   const attnHeadsEl = document.getElementById('attn-heads');
   const attnLayerEl = document.getElementById('attn-layer');
+  const attnReadingEl = document.getElementById('attn-reading');
   const attnEmpty = document.getElementById('attn-empty');
   const attnGrid = document.querySelector('.attn-grid');
   const reportEl = document.getElementById('report');
@@ -951,12 +986,96 @@
     return { cols: best.cols, rows: best.rows };
   }
 
+  /* Formas decorativas: cada máscara dice si la celda (cx, cy) pertenece a la figura. */
+  const SHAPES = {
+    brain: {
+      aspect: 1.2,
+      inside(cx, cy, cols, rows) {
+        const u = (cx + 0.5) / cols, v = (cy + 0.5) / rows;
+        if (Math.abs(u - 0.5) < 0.014) return false;
+        const left = u < 0.5;
+        const taper = 1 + 0.14 * (0.5 - v); // más ancho adelante que atrás
+        const dx = (u - (left ? 0.265 : 0.735)) / (0.235 * taper);
+        const dy = (v - 0.5) / 0.46;
+        const d2 = dx * dx + dy * dy;
+        const edge = 1 + 0.045 * Math.sin(10 * Math.atan2(dy, dx) + (left ? 0 : 1.7));
+        if (d2 > edge * edge) return false;
+        // Surcos: curvas cortas y onduladas, solo hacia el borde, como las circunvoluciones.
+        const f = Math.sin(15 * v + 1.3 * Math.sin(14 * u + (left ? 0 : 2.5)));
+        return !(d2 > 0.3 && Math.abs(f) > 0.985);
+      },
+    },
+    chip: {
+      aspect: 1,
+      inside(cx, cy, cols, rows) {
+        const pinLen = Math.max(2, Math.round(cols * 0.05));
+        const o = pinLen + 1; // un hueco separa los pines del cuerpo
+        const inX = cx >= o && cx < cols - o, inY = cy >= o && cy < rows - o;
+        if (inX && inY) return cx - o + (cy - o) >= 4; // muesca de la esquina
+        const pin = (a, size) => a >= o + 2 && a <= size - o - 3 && a % 2 === 0;
+        const nearX = cx < pinLen || cx >= cols - pinLen;
+        const nearY = cy < pinLen || cy >= rows - pinLen;
+        if (inY && nearX) return pin(cy, rows);
+        if (inX && nearY) return pin(cx, cols);
+        return false;
+      },
+    },
+  };
+
+  let layout = { xs: new Uint16Array(0), ys: new Uint16Array(0), spare: [] };
+
+  function buildLayout(n, shape) {
+    const spec = SHAPES[shape];
+    if (!spec) {
+      const g = gridDims(n);
+      const xs = new Uint16Array(n), ys = new Uint16Array(n);
+      for (let i = 0; i < n; i++) { xs[i] = i % g.cols; ys[i] = (i / g.cols) | 0; }
+      return { cols: g.cols, rows: g.rows, xs, ys, spare: [] };
+    }
+    let cols = Math.max(8, Math.ceil(Math.sqrt(n * spec.aspect)));
+    for (;; cols++) {
+      const rows = Math.round(cols / spec.aspect);
+      const cells = [];
+      for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+          if (spec.inside(cx, cy, cols, rows)) cells.push(cx, cy);
+        }
+      }
+      const count = cells.length / 2;
+      if (count < n) continue;
+      // Reparte las neuronas de forma pareja; las celdas sobrantes quedan como "apagadas".
+      const xs = new Uint16Array(n), ys = new Uint16Array(n), used = new Uint8Array(count);
+      for (let i = 0; i < n; i++) {
+        const k = Math.floor((i * count) / n);
+        used[k] = 1;
+        xs[i] = cells[2 * k];
+        ys[i] = cells[2 * k + 1];
+      }
+      const spare = [];
+      for (let k = 0; k < count; k++) if (!used[k]) spare.push(cells[2 * k], cells[2 * k + 1]);
+      return { cols, rows, xs, ys, spare };
+    }
+  }
+
   function resizeHeatmap() {
-    const g = gridDims(META.neurons_per_layer);
-    COLS = g.cols;
-    ROWS = g.rows;
+    const n = META.neurons_per_layer || 3072;
+    layout = buildLayout(n, heatmapShapeEl.value);
+    COLS = layout.cols;
+    ROWS = layout.rows;
+    cellIndex = new Int32Array(COLS * ROWS).fill(-1);
+    for (let i = 0; i < n; i++) cellIndex[layout.ys[i] * COLS + layout.xs[i]] = i;
     prepareCanvas(heatmap, hctx, COLS * CELL, ROWS * CELL);
     needsDraw = true;
+  }
+
+  // Neurona bajo el puntero (o -1).
+  function neuronAtEvent(e) {
+    const r = heatmap.getBoundingClientRect();
+    const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
+    const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return -1;
+    const i = cellIndex[cy * COLS + cx];
+    return i < META.neurons_per_layer ? i : -1;
   }
 
   // El overview se dibuja a la resolución real del panel para que las
@@ -1096,11 +1215,14 @@
       ? `Δ · ${max.toFixed(2)}`
       : `${layerScale ? `capa ${selectedLayer}` : 'global'} · ${max.toFixed(2)}`;
 
+    const { xs, ys, spare } = layout;
+    hctx.fillStyle = 'rgba(148, 163, 184, .06)';
+    for (let k = 0; k < spare.length; k += 2) {
+      hctx.fillRect(spare[k] * CELL, spare[k + 1] * CELL, CELL - 0.75, CELL - 0.75);
+    }
     for (let i = 0; i < n; i++) {
-      const cx = i % COLS;
-      const cy = (i / COLS) | 0;
       hctx.fillStyle = colorFor(diff ? comparison.values[i] : lerpVal(key, i, t), max);
-      hctx.fillRect(cx * CELL, cy * CELL, CELL - 0.75, CELL - 0.75);
+      hctx.fillRect(xs[i] * CELL, ys[i] * CELL, CELL - 0.75, CELL - 0.75);
     }
 
     // Destello de las neuronas que acaban de encenderse: el cambio se ve
@@ -1115,9 +1237,8 @@
         if (d <= 0) continue;
         const k = d / (max || 1);
         if (k < 0.10) continue;
-        const cx = i % COLS, cy = (i / COLS) | 0;
         hctx.globalAlpha = Math.min(.85, k * 1.7 * (1 - t));
-        hctx.fillRect(cx * CELL, cy * CELL, CELL - 0.5, CELL - 0.5);
+        hctx.fillRect(xs[i] * CELL, ys[i] * CELL, CELL - 0.5, CELL - 0.5);
       }
       hctx.restore();
     }
@@ -1130,12 +1251,11 @@
       const idx = diff ? item.neuron : item[0];
       const v = diff ? item.delta : item[1];
       if (diff ? Math.abs(v) < 1e-9 : v <= 0) continue;
-      const cx = idx % COLS, cy = (idx / COLS) | 0;
       hctx.globalAlpha = clamp(Math.abs(v) / (max || 1), 0, 1) * 0.95;
       hctx.drawImage(
         glowSprite,
-        cx * CELL - CELL * 1.2,
-        cy * CELL - CELL * 1.2,
+        xs[idx] * CELL - CELL * 1.2,
+        ys[idx] * CELL - CELL * 1.2,
         CELL * 3.4,
         CELL * 3.4
       );
@@ -1144,13 +1264,12 @@
 
     // Anillo de la neurona seleccionada
     if (selectedNeuron !== null && selectedNeuron < n) {
-      const cx = selectedNeuron % COLS, cy = (selectedNeuron / COLS) | 0;
       hctx.save();
       hctx.strokeStyle = '#ffffff';
       hctx.lineWidth = 2.5;
       hctx.shadowColor = '#22d3ee';
       hctx.shadowBlur = 12;
-      hctx.strokeRect(cx * CELL - 1.5, cy * CELL - 1.5, CELL + 1, CELL + 1);
+      hctx.strokeRect(xs[selectedNeuron] * CELL - 1.5, ys[selectedNeuron] * CELL - 1.5, CELL + 1, CELL + 1);
       hctx.restore();
     }
 
@@ -1202,7 +1321,7 @@
     }
     if (attnHeadsEl.childElementCount !== attnMeta.heads) {
       attnHeadsEl.innerHTML = Array.from({ length: attnMeta.heads },
-        (_, h) => `<button data-head="${h}">c${h}</button>`).join('');
+        (_, h) => `<button data-head="${h}" title="Cabeza ${h}">c${h}</button>`).join('');
     }
     [...attnHeadsEl.children].forEach((b, h) => b.classList.toggle('sel', h === attnHead));
   }
@@ -1270,10 +1389,10 @@
     ctx.font = '9px ui-monospace, monospace';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#475569';
-    ctx.fillText('tokens →', labelW, h - 5);
+    ctx.fillText('palabras del texto →', labelW, h - 5);
     ctx.textAlign = 'right';
     ctx.fillStyle = '#67e8f9';
-    ctx.fillText('query', w - 6, h - 5);
+    ctx.fillText('última palabra', w - 6, h - 5);
   }
 
   function drawAttnFan(heads, headIdx) {
@@ -1291,12 +1410,12 @@
     const queryIdx = tokens.length - 1;
     const queryText = truncText(tokens[queryIdx] || '␣', Math.max(8, maxChars + 4));
     const cx = w / 2;
-    const centerY = h - 36;
+    const centerY = h - 44;
 
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(148,163,184,.75)';
     ctx.font = '600 10px ui-monospace, monospace';
-    ctx.fillText('TOKEN QUE PREDICE', cx, 13);
+    ctx.fillText('PALABRAS EN LAS QUE SE FIJA', cx, 13);
 
     pairs.forEach(([pos, weight], i) => {
       const x = pad + slot * i + slot / 2;
@@ -1339,6 +1458,23 @@
     ctx.fillStyle = '#a5f3fc';
     ctx.font = '600 12px ui-monospace, monospace';
     ctx.fillText(queryText, cx, centerY + 17);
+    ctx.fillStyle = 'rgba(148,163,184,.75)';
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.fillText('ÚLTIMA PALABRA ESCRITA', cx, h - 4);
+  }
+
+  function updateAttnReading(layer, head) {
+    const tokens = attnData.tokens;
+    const pairs = (layer[head] || []).filter(([pos]) => pos >= 0 && pos < tokens.length);
+    if (!tokens.length || !pairs.length) { attnReadingEl.textContent = ''; return; }
+    const show = (t) => `«${truncText((t || '␣').trim() || '␣', 18)}»`;
+    const top = [...pairs].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const last = show(tokens[tokens.length - 1]);
+    const parts = top.map(([pos, w]) => `${show(tokens[pos])} (${(w * 100).toFixed(0)} %)`);
+    const self = top[0][0] === tokens.length - 1;
+    attnReadingEl.textContent =
+      `Lectura: al decidir qué viene después de ${last}, la cabeza c${head} de la capa ${selectedLayer} ` +
+      `se fija sobre todo en ${parts.join(', ')}` + (self ? ' (se mira a sí misma, algo muy habitual).' : '.');
   }
 
   function drawAttention() {
@@ -1346,6 +1482,7 @@
     if (!attnMeta.available) return;
     const layer = attnData.layers && attnData.layers[`layer_${selectedLayer}`];
     if (!layer || !layer.length) {
+      attnReadingEl.textContent = '';
       attnGeom = null;
       clearCanvas(attnMapCtx, attnMap);
       clearCanvas(attnFanCtx, attnFan);
@@ -1354,6 +1491,7 @@
     const head = Math.min(attnHead, layer.length - 1);
     drawAttnMap(layer);
     drawAttnFan(layer, head);
+    updateAttnReading(layer, head);
   }
 
   function frame(now) {
@@ -1634,15 +1772,8 @@
   });
 
   heatmap.addEventListener('mousemove', (e) => {
-    const r = heatmap.getBoundingClientRect();
-    const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
-    const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
-    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) {
-      tooltip.style.display = 'none';
-      return;
-    }
-    const i = cy * COLS + cx;
-    if (i >= META.neurons_per_layer) {
+    const i = neuronAtEvent(e);
+    if (i < 0) {
       tooltip.style.display = 'none';
       return;
     }
@@ -1656,15 +1787,11 @@
     tooltip.textContent =
       `capa ${selectedLayer} · neurona ${i} · ${diff ? 'Δ ' : ''}${v.toFixed(3)}`;
   });
+  heatmapShapeEl.addEventListener('change', resizeHeatmap);
   heatmap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
   heatmap.addEventListener('click', (e) => {
-    const r = heatmap.getBoundingClientRect();
-    const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
-    const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
-    const i = cy * COLS + cx;
-    if (cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS && i < META.neurons_per_layer) {
-      selectNeuron(i);
-    }
+    const i = neuronAtEvent(e);
+    if (i >= 0) selectNeuron(i);
   });
 
   topkEl.addEventListener('click', (e) => {
@@ -3354,6 +3481,30 @@
       what: 'Prohíbe repetir una misma secuencia de N tokens seguidos.',
       why: 'Es una regla más estricta que Rep. penalty contra los bucles: con N=3 ninguna secuencia de 3 tokens se repite.',
       tip: '0 o 1 lo desactivan; desde 2 está activo. Inicial: 0.',
+    },
+    attn: {
+      title: 'Atención',
+      what: 'El mecanismo con el que el modelo decide en qué palabras anteriores fijarse antes de escribir la siguiente.',
+      why: 'Sin atención el modelo no sabría que «ella» se refiere a «María». Mirar el contexto es lo que le da coherencia al texto.',
+      tip: 'Mirá primero la frase «Lectura» de arriba: resume en palabras lo que muestran los gráficos.',
+    },
+    attn_head: {
+      title: 'Cabeza de atención',
+      what: 'Cada capa tiene varios «ayudantes» que miran el texto en paralelo. Cada uno se fija en cosas distintas: la palabra anterior, el sujeto, signos de puntuación…',
+      why: 'Al elegir una cabeza ves a qué palabras presta atención. Las líneas gruesas y los porcentajes altos marcan las palabras más importantes para ella.',
+      tip: 'Probá varias cabezas: algunas miran casi siempre lo mismo y otras cambian con cada frase. No hay una «mejor».',
+    },
+    attn_map: {
+      title: 'Resumen de todas las cabezas',
+      what: 'Una grilla con todos los ayudantes de la capa: cada fila es una cabeza y cada columna una palabra del texto.',
+      why: 'Permite ver de un vistazo qué cabezas se concentran en pocas palabras (una celda brillante) y cuáles reparten su atención.',
+      tip: 'La columna punteada de la derecha es la última palabra escrita. Los puntos tenues no son «cero», solo quedaron fuera de las 8 conexiones más fuertes.',
+    },
+    shape: {
+      title: 'Forma del mapa',
+      what: 'El dibujo en que se reparten las neuronas de la capa: cuadrícula, cerebro o chip.',
+      why: 'Es solo estético. Las neuronas de una capa son una lista de números sin posición real, así que su lugar en el dibujo es arbitrario.',
+      tip: 'Que una zona del cerebro se encienda no significa que esa zona «haga» algo. Para analizar, la cuadrícula es lo más neutro.',
     },
     capture_all: {
       title: 'Exportar · todas las capas',

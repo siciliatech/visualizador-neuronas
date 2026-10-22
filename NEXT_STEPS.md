@@ -222,9 +222,15 @@ Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin ca
   `act_fn(gate_proj(x)) * up_proj(x)` (la neurona completa, antes de `down_proj`).
 - **Atención:** **implementado** — se captura `blocks.{i}.attn.hook_pattern`, se toma la última query
   y se envían las top-8 conexiones por cabeza; la UI dibuja el fan y el mapa cabezas × tokens.
+- **Atención explicada:** **implementado** — introducción en lenguaje llano, frase «Lectura» generada
+  con los datos reales de la cabeza seleccionada, etiquetas sin jerga («última palabra», «palabras en
+  las que se fija») e iconos de ayuda en los dos gráficos.
 - **Atención honesta:** **implementado** — la leyenda y el tooltip aclaran que solo se dibuja el top-8
   por cabeza; las celdas restantes llevan un punto tenue para no confundirlas con atención cero. Los
   tokens especiales de los modelos chat se etiquetan con su nombre real en vez de quedar en blanco.
+- **Forma del mapa:** **implementado** — el selector **Forma** dibuja las neuronas como cuadrícula
+  (por defecto), cerebro o chip. Es un adorno: cada neurona se asigna a una celda de la máscara y
+  hover, clic, brillo y anillo de selección usan esa posición. No cambia valores, rankings ni exportaciones.
 - **Ayuda contextual:** **implementado** — cada control de la barra superior tiene un icono **?** que abre
   un popover accesible (teclado, `aria-expanded`, cierre con Esc o clic fuera) con qué es, para qué sirve
   y un consejo. Los textos están en el objeto `HELP` de `index.html`.

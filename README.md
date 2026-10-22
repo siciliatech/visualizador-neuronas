@@ -145,7 +145,9 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
    es y para qué sirve; se cierra con clic fuera o Esc.
 5. En el heatmap, **clic en una fila** del overview (izquierda) para seleccionar la capa mostrada;
    pasa el ratón por el heatmap para ver capa/neurona/valor exactos. La casilla **escala por capa**
-   ajusta los colores al máximo de la capa visible si una activación extrema aplana el mapa.
+   ajusta los colores al máximo de la capa visible si una activación extrema aplana el mapa. El
+   selector **Forma** reparte las neuronas en una cuadrícula (por defecto), un cerebro o un chip;
+   es solo decorativo: el lugar de cada neurona en el dibujo es arbitrario.
 6. Haz **clic en una neurona** del heatmap o del ranking para ver su valor, su posición y su
    **historial de activación token a token**. El panel «¿Qué estoy viendo?» resume la interpretación.
 7. En el panel de **atención**, elige una cabeza (`c0`…`c13`) o haz clic en su fila del mapa para ver
@@ -183,7 +185,9 @@ El overview y el ranking de neuronas ordenan por el **valor de activación con s
 menor); el ancho de las barras usa `|v|` solo como escala visual. El informe, en cambio, busca la mayor
 **magnitud** `|activación|`, así que puede destacar una neurona muy negativa que no encabeza el ranking.
 
-En el mapa de atención solo se dibujan las **8 conexiones más fuertes por cabeza**. Las celdas que
+La sección de atención abre con una explicación en lenguaje llano (las cabezas como «ayudantes» que
+se fijan en palabras distintas), una frase de **Lectura** que resume en palabras la cabeza elegida
+(«se fija sobre todo en…») y iconos **?** en cada gráfico. En el mapa de atención solo se dibujan las **8 conexiones más fuertes por cabeza**. Las celdas que
 quedan fuera de ese top-8 llevan un punto tenue: no son atención cero y el tooltip lo indica como
 «fuera del top-8». Los tokens especiales de los modelos chat (`<|im_start|>`, `<|endoftext|>`, etc.) se
 etiquetan con su nombre en lugar de mostrarse como un espacio.

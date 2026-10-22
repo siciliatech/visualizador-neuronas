@@ -226,3 +226,49 @@ def test_iconos_de_ayuda_abren_y_cierran_el_popover(page):
     page.locator('[data-help="mode"]').click()
     page.locator("h1").click()
     assert pop.is_hidden()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize("shape", ["brain", "chip"])
+def test_forma_del_mapa_conserva_la_seleccion_de_neuronas(page, shape):
+    _emit(page, _meta())
+    _emit(page, _step(1.0, "a"))
+    _emit(page, _done("a"))
+
+    page.locator("#heatmap-shape").select_option(shape)
+    point = page.evaluate(
+        """() => {
+          const i = 7;
+          const r = heatmap.getBoundingClientRect();
+          return {
+            x: r.left + (layout.xs[i] + 0.5) * CELL * r.width / canvasW(heatmap),
+            y: r.top + (layout.ys[i] + 0.5) * CELL * r.height / canvasH(heatmap),
+          };
+        }"""
+    )
+    page.mouse.click(point["x"], point["y"])
+    assert page.evaluate("selectedNeuron") == 7
+    # Todas las neuronas tienen una celda propia y distinta.
+    assert page.evaluate(
+        "new Set(Array.from(layout.xs, (x, i) => x + ',' + layout.ys[i])).size"
+        " === META.neurons_per_layer"
+    )
+
+
+@pytest.mark.ui
+def test_atencion_incluye_lectura_en_lenguaje_llano(page):
+    meta = _meta()
+    meta["attention"] = {"available": True, "heads": 1, "top_k": 8}
+    _emit(page, meta)
+
+    step = _step(1.0, "a")
+    step["attention"] = {
+        "tokens": ["hola", "mundo"],
+        "layers": {"layer_0": [[[0, 0.7], [1, 0.3]]]},
+    }
+    _emit(page, step)
+
+    page.wait_for_function("document.querySelector('#attn-reading')?.textContent.includes('hola')")
+    reading = page.locator("#attn-reading").inner_text()
+    assert "«hola» (70 %)" in reading
+    assert "«mundo»" in reading

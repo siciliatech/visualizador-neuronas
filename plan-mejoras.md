@@ -17,6 +17,8 @@ predeterminado.
 | Comparación, ablación y exportación | Hecho | Comparación A/B, ablación de una neurona con semilla reproducible, CSV y Parquet. |
 | Empaquetado y documentación | Hecho | Docker CPU, dependencias fijadas y requisitos de memoria documentados. |
 | Calidad continua | Hecho | Tests unitarios y de integración, lint y CI. |
+| Atención explicada | Hecho | Introducción en lenguaje llano, frase «Lectura» dinámica, etiquetas sin jerga y ayudas **?**. |
+| Forma del mapa | Hecho | Selector cuadrícula / cerebro / chip; decorativo, la cuadrícula sigue por defecto. |
 | Ayuda contextual | Hecho | Iconos **?** con popover explicativo en cada control de muestreo y entrada. |
 | Escala visual por capa | Hecho | Opción para ajustar el contraste a la capa visible; la escala global sigue disponible. |
 
