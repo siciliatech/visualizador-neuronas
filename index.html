@@ -985,7 +985,7 @@
     const slot = (w - pad * 2) / n;
     const maxChars = Math.max(4, Math.floor((slot - 16) / 6.5));
     const queryIdx = tokens.length - 1;
-    const queryText = truncText(tokens[queryIdx], Math.max(8, maxChars + 4));
+    const queryText = truncText(tokens[queryIdx] || '␣', Math.max(8, maxChars + 4));
     const cx = w / 2;
     const centerY = h - 36;
 
@@ -1007,7 +1007,7 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      const text = truncText(tokens[pos], maxChars);
+      const text = truncText(tokens[pos] || '␣', maxChars);
       ctx.font = '600 11px ui-monospace, monospace';
       const tw = ctx.measureText(text).width;
       const bw = Math.min(slot - 6, Math.max(42, tw + 20));
@@ -1229,7 +1229,7 @@
     }
     const layer = attnData.layers[`layer_${selectedLayer}`] || [];
     const pair = (layer[head] || []).find(([p]) => p === pos);
-    const tok = truncText(attnData.tokens[pos], 26);
+    const tok = truncText(attnData.tokens[pos] || '␣', 26);
     tooltip.style.display = 'block';
     tooltip.style.left = `${e.clientX + 14}px`;
     tooltip.style.top = `${e.clientY + 14}px`;
@@ -1374,6 +1374,8 @@
     for (const [key, values] of Object.entries(data.activations)) curr[key] = values;
     topkData = data.top || {};
     if (data.attention) attnData = data.attention;
+    const text = data.delta ?? data.token ?? '';
+    const tokenLabel = text.trim() ? text : '␣';
 
     let maxAbs = 1e-6;
     let bestAct = { value: -Infinity, layer: 0, neuron: 0 };
@@ -1397,9 +1399,9 @@
     // Informe: acumulamos los récords de toda la generación.
     if (!report.firstStepAt) report.firstStepAt = performance.now();
     report.tokens = tokenCount + 1;
-    if (bestAct.value > report.maxAct.value) report.maxAct = { ...bestAct, token: data.token };
+    if (bestAct.value > report.maxAct.value) report.maxAct = { ...bestAct, token: tokenLabel };
     if (bestLayer.value > report.maxLayerMean.value) {
-      report.maxLayerMean = { ...bestLayer, token: data.token };
+      report.maxLayerMean = { ...bestLayer, token: tokenLabel };
     }
     if (data.attention && data.attention.layers) {
       const toks = data.attention.tokens || [];
@@ -1411,7 +1413,7 @@
             if (w > best.weight) {
               best = {
                 weight: w, layer: layerIdx, head: h, pos,
-                token: (toks[pos] || '').trim() || '␣', predicted: data.token,
+                token: (toks[pos] || '').trim() || '␣', predicted: tokenLabel,
               };
             }
           }
@@ -1424,7 +1426,7 @@
     needsDraw = true;
     tokenCount++;
     chipToken.textContent = `token ${tokenCount}`;
-    appendToken(data.token);
+    if (text) appendToken(text);
 
     const key = `layer_${selectedLayer}`;
     if (selectedNeuron !== null) {
@@ -1442,17 +1444,34 @@
      ========================================================= */
   let ws;
   let reconnectTimer;
+  let lastErrorMessage = '';
 
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${location.host || 'localhost:8000'}/ws`);
     ws.onopen = () => {
-      statusEl.textContent = 'Conectado. Escribe un prompt y pulsa Generar.';
-      setBadge('idle', 'sin cargar');
+      // Si venimos de una desconexión a mitad de generación, el estado local
+      // puede haber quedado en "running"; sin este reset el botón quedaría
+      // habilitado pero send() saldría por el guard y no haría nada.
+      running = false;
+      caret.style.display = 'none';
+      if (lastErrorMessage) {
+        // No borrar el error del servidor al reconectar: el usuario debe
+        // poder leerlo hasta que lance una generación nueva.
+        statusEl.textContent = lastErrorMessage;
+        setBadge('error', 'error');
+      } else {
+        statusEl.textContent = 'Conectado. Escribe un prompt y pulsa Generar.';
+        setBadge('idle', 'sin cargar');
+      }
       sendBtn.disabled = false;
     };
     ws.onclose = () => {
-      statusEl.textContent = 'Desconectado. Reintentando…';
+      running = false;
+      caret.style.display = 'none';
+      statusEl.textContent = lastErrorMessage
+        ? `${lastErrorMessage} (reconectando…)`
+        : 'Desconectado. Reintentando…';
       setBadge('error', 'desconectado');
       sendBtn.disabled = true;
       clearTimeout(reconnectTimer);
@@ -1460,6 +1479,27 @@
     };
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
+      if (data.type === 'queued') {
+        // Otro cliente está usando el modelo compartido: la generación se
+        // ejecutará cuando termine la anterior, sin mezclar activaciones.
+        statusEl.textContent = data.message || 'Otro cliente está generando; esperando turno…';
+        setBadge('loading', 'en cola');
+        return;
+      }
+
+      if (data.type === 'error') {
+        // Errores recuperables (validación) dejan el socket abierto; los
+        // internos llegan antes de un cierre 1011. En ambos casos la UI
+        // vuelve a quedar utilizable para reintentar.
+        lastErrorMessage = data.message || 'Error del servidor.';
+        running = false;
+        sendBtn.disabled = false;
+        caret.style.display = 'none';
+        setBadge('error', 'error');
+        statusEl.textContent = lastErrorMessage;
+        return;
+      }
 
       if (data.type === 'loading') {
         setBadge('loading', `cargando ${data.model}`);
@@ -1494,6 +1534,7 @@
         renderReport();
         streamEl.innerHTML = '';
         promptEcho.textContent = data.chat ? '' : data.prompt;
+        lastErrorMessage = '';
         setBadge('ready', 'listo');
         statusEl.textContent =
           `Modelo listo · ${data.model_label} · ${META.layers} capas × ${META.neurons_per_layer} neuronas · generando…`;
@@ -1512,6 +1553,22 @@
         running = false;
         sendBtn.disabled = false;
         caret.style.display = 'none';
+        lastErrorMessage = '';
+        setBadge('ready', 'listo');
+        // El stream se construye con deltas; al cerrar, comprobamos que el
+        // texto acumulado coincide con el que decodificó el servidor.
+        let expected = data.generated_text;
+        if (typeof expected !== 'string') {
+          const prompt = promptEcho.textContent || '';
+          if (!META.chat && prompt && typeof data.text === 'string'
+              && data.text.startsWith(prompt)) {
+            expected = data.text.slice(prompt.length);
+          }
+        }
+        if (typeof expected === 'string' && streamEl.textContent !== expected) {
+          streamEl.innerHTML = '';
+          if (expected) appendToken(expected);
+        }
         report.stopped = data.stopped || '';
         if (typeof data.tokens === 'number') report.tokens = data.tokens;
         report.elapsed = report.firstStepAt
@@ -1538,6 +1595,7 @@
 
   function send() {
     if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
+    lastErrorMessage = '';
     running = true;
     sendBtn.disabled = true;
     setBadge('loading', 'generando…');

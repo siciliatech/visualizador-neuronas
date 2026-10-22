@@ -260,6 +260,24 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
 
 ## 4. Mejoras pendientes
 
+- **Rendimiento base:** **implementado** — `pos_slice=-1` limita el caché de activaciones/atención a la
+  última query, y el forward de calentamiento se reutiliza para muestrear el primer token (sin una
+  segunda pasada idéntica por el prompt).
+- **KV cache:** **implementado** — el prefill procesa el prompt completo y cada token siguiente pasa solo
+  el token nuevo con `past_key_values`; las etiquetas de atención conservan el contexto completo. Si el
+  modelo no devuelve caché, se vuelve al forward completo. `VISUALIZER_KV_CACHE=0` permite comparar o
+  revertir sin tocar código. Con GPT-2 y 512 tokens de contexto el coste por token bajó de ~0,158 s a
+  ~0,012 s (~13×).
+- **Concurrencia y locks:** **implementado** — `load_lock` evita cargas duplicadas del mismo modelo y
+  `generation_lock` serializa las generaciones. El segundo cliente recibe `queued` y espera; las
+  activaciones, la atención y la decodificación son locales a cada generación, así que no se mezclan.
+- **Decodificación incremental:** **implementado** — cada `step` envía `delta` (con `token` como alias),
+  decodificado desde el prefijo completo para no partir caracteres UTF-8 multibyte; los tokens parciales
+  de atención quedan vacíos y `done.generated_text` permite reconciliar el stream. El smoke test verifica
+  que no haya `�` ni diferencias entre el stream y el texto final.
+- **Errores y validación del WebSocket:** **implementado** — Pydantic valida `generate` antes de tocar el
+  modelo; los errores de entrada (`invalid_request`, `invalid_json`) no cierran el socket y los fallos
+  internos se reportan con `recoverable: false` antes de cerrar con código 1011.
 - **MLP con compuerta (Qwen/LLaMA/Gemma):** resuelto con `blocks.{i}.mlp.hook_post`, que es
   `act_fn(gate_proj(x)) * up_proj(x)` (la neurona completa, antes de `down_proj`).
 - **Atención:** **implementado** — se captura `blocks.{i}.attn.hook_pattern`, se toma la última query
@@ -270,5 +288,5 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
 - **Comparar prompts:** guardar dos pasadas y mostrar el *diferencial* de activación (qué neuronas cambian).
 - **Ablación interactiva:** clic en una neurona → apagarla y ver cómo cambia el texto generado.
 - **Exportar:** volcar las activaciones de una generación a CSV/Parquet para analizarlas fuera.
-- **Rendimiento:** el servidor mantiene un solo modelo en RAM; si agregas concurrencia, aísla `activations`
-  por conexión.
+- **Rendimiento:** el servidor mantiene un solo modelo en RAM y serializa las generaciones. Para
+  paralelismo real habría que aislar el bridge/caché por conexión.
