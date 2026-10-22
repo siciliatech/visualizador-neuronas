@@ -224,7 +224,7 @@
   }
   .ghost-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
   .ghost-btn:disabled { opacity: .45; cursor: default; }
-  .report-actions { display: flex; gap: 8px; }
+  .report-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
   .report { font-size: .9rem; color: var(--muted); line-height: 1.6; }
   .report p { margin: 0 0 10px; }
   .report b { color: var(--text); }
@@ -256,6 +256,30 @@
     .report-grid { grid-template-columns: 1fr 1fr; }
     .report-glossary { grid-template-columns: 1fr; }
   }
+
+  /* ---------- Comparación ---------- */
+  .compare-panel { margin-top: 16px; padding: 16px; }
+  .compare-panel[hidden], .compare-controls[hidden] { display: none; }
+  .compare-controls {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px;
+  }
+  .compare-controls label {
+    color: var(--dim); font-size: .66rem; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .compare-controls select { padding: 6px 9px; font-size: .78rem; max-width: 100%; }
+  .compare-table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+    font: .78rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .compare-table th, .compare-table td {
+    padding: 6px; border-bottom: 1px solid var(--border); text-align: right;
+  }
+  .compare-table th:first-child, .compare-table td:first-child { text-align: left; }
+  .compare-table th { color: var(--dim); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; }
+  .compare-table td { color: var(--muted); }
+  .compare-table .pos { color: #fbbf24; }
+  .compare-table .neg { color: #60a5fa; }
 
   /* ---------- Atención ---------- */
   .attn-panel { margin-top: 16px; padding: 16px; }
@@ -435,7 +459,7 @@
   <section class="panel card heatmap-panel">
     <div class="panel-head">
       <h2 id="heatmap-title">Mapa de neuronas · Capa 0</h2>
-      <span class="hint">cada celda = una neurona</span>
+      <span class="hint" id="heatmap-hint">cada celda = una neurona</span>
     </div>
     <canvas id="heatmap" width="768" height="576"></canvas>
     <div class="legend">
@@ -461,10 +485,10 @@
       <div id="detail-empty" class="muted">Haz clic en una neurona del mapa o en el ranking.</div>
       <div id="detail-body" hidden>
         <div class="detail-row"><span>Neurona</span><b id="d-neuron">—</b></div>
-        <div class="detail-row"><span>Valor actual</span><b id="d-value">—</b></div>
+        <div class="detail-row"><span id="d-value-label">Valor actual</span><b id="d-value">—</b></div>
         <div class="detail-row"><span>Ranking</span><b id="d-rank">—</b></div>
         <canvas id="spark" width="260" height="76"></canvas>
-        <div class="muted small">Su activación en los últimos tokens.</div>
+        <div class="muted small" id="spark-note">Su activación en los últimos tokens.</div>
       </div>
     </section>
   </aside>
@@ -521,11 +545,29 @@
     <div class="report-actions">
       <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
       <button id="export-csv" class="ghost-btn" disabled title="Descargar en CSV las neuronas de la capa visible durante toda la generación (requiere activar «todas las capas» antes de generar)">CSV capa</button>
+      <button id="save-a" class="ghost-btn" disabled title="Guardar esta generación como A para compararla con una segunda pasada">Guardar A</button>
+      <button id="compare-runs" class="ghost-btn" disabled title="Comparar A con la generación actual; requiere capturar todas las capas en ambas">Comparar</button>
     </div>
   </div>
   <div id="report" class="report">
     <p class="muted">Pulsa <b>Generar</b> y aquí aparecerá un informe en lenguaje claro con lo que ocurrió por dentro.</p>
   </div>
+</section>
+
+<section class="panel card compare-panel" id="compare-panel" hidden>
+  <div class="panel-head">
+    <h2>Comparación A vs B</h2>
+    <button id="compare-exit" class="ghost-btn" title="Cerrar la comparación">Cerrar</button>
+  </div>
+  <div id="compare-controls" class="compare-controls" hidden>
+    <label for="compare-step">Vista</label>
+    <select id="compare-step" title="Elegir media, paso por posición o token coincidente por contenido">
+      <option value="mean">Media de la generación</option>
+    </select>
+    <button id="compare-overlay" class="ghost-btn" disabled
+      title="Mostrar la diferencia B − A en el mapa principal">Ver diff en heatmap</button>
+  </div>
+  <div id="compare-body" class="report"></div>
 </section>
 
 <details class="explainer card">
@@ -538,6 +580,7 @@
       <li><b>Cada token nuevo</b> recorre las capas (reutilizando el KV cache cuando está disponible): por eso el patrón cambia y se anima.</li>
       <li>Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
       <li>El panel de <b>atención</b> muestra las conexiones reales: a qué tokens anteriores mira cada cabeza al predecir el siguiente. Cada cabeza es un “canal” distinto.</li>
+      <li>En <b>Comparación A vs B</b>, <b>Vista</b> permite comparar la media, una misma posición o tokens coincidentes por contenido; <b>Ver diff en heatmap</b> cambia el mapa, el ranking, el tooltip y el detalle a <b>Δ = B − A</b>; <b>Ver heatmap actual</b> vuelve a la activación normal.</li>
     </ul>
     <p class="small">Nota: esto muestra activaciones, no “pensamientos” ni conexiones físicas. Es una ventana a los números con los que el modelo calcula.</p>
   </div>
@@ -565,6 +608,13 @@
   // Cada paso completo se guarda como Float32Array por capa para que el CSV
   // pueda elegir cualquier capa sin reenviar datos al servidor.
   let capturedSteps = [];
+  let runSerial = 0;
+  let snapshotA = null;
+  let comparison = null;
+  let compareSnapshots = null;
+  let compareStep = 'mean';
+  let compareAlignments = [];
+  let compareHeatmap = false;
   let spark = [];
   let tokenCount = 0;
   let running = false;
@@ -602,11 +652,13 @@
       curr[key] = values;
       prev[key] = values;
     }
-    document.getElementById('heatmap-title').textContent =
-      `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+    updateHeatmapHeading();
     if (capturedSteps.length) {
       exportCsvBtn.title =
         `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
+    }
+    if (compareSnapshots) {
+      showComparison(compareSnapshots.a, compareSnapshots.b);
     }
     renderTopk();
     updateDetail();
@@ -684,8 +736,8 @@
     [.62, [208, 38, 230]], [.82, [255, 90, 170]], [1, [255, 246, 250]]
   ]);
 
-  function colorFor(v) {
-    const t = Math.min(1, Math.abs(v) / (scaleMax || 1));
+  function colorFor(v, max = scaleMax) {
+    const t = Math.min(1, Math.abs(v) / (max || 1));
     const idx = Math.round(Math.pow(t, 0.62) * 255);
     return v < 0 ? NEG_LUT[idx] : POS_LUT[idx];
   }
@@ -758,6 +810,17 @@
   const reportEl = document.getElementById('report');
   const copyReportBtn = document.getElementById('copy-report');
   const exportCsvBtn = document.getElementById('export-csv');
+  const saveABtn = document.getElementById('save-a');
+  const compareBtn = document.getElementById('compare-runs');
+  const comparePanel = document.getElementById('compare-panel');
+  const compareBody = document.getElementById('compare-body');
+  const compareExitBtn = document.getElementById('compare-exit');
+  const compareControls = document.getElementById('compare-controls');
+  const compareStepSelect = document.getElementById('compare-step');
+  const compareOverlayBtn = document.getElementById('compare-overlay');
+  const heatmapHint = document.getElementById('heatmap-hint');
+  const dValueLabel = document.getElementById('d-value-label');
+  const sparkNote = document.getElementById('spark-note');
 
   function setBadge(state, text) {
     modelBadge.className = `badge ${state}`;
@@ -912,20 +975,22 @@
     const w = canvasW(heatmap), h = canvasH(heatmap);
     hctx.clearRect(0, 0, w, h);
     const key = `layer_${selectedLayer}`;
-    const t = animT();
+    const diff = diffHeatmapActive();
+    const t = diff ? 1 : animT();
     const n = META.neurons_per_layer;
+    const max = diff ? comparison.maxAbs : scaleMax;
 
     for (let i = 0; i < n; i++) {
       const cx = i % COLS;
       const cy = (i / COLS) | 0;
-      hctx.fillStyle = colorFor(lerpVal(key, i, t));
+      hctx.fillStyle = colorFor(diff ? comparison.values[i] : lerpVal(key, i, t), max);
       hctx.fillRect(cx * CELL, cy * CELL, CELL - 0.75, CELL - 0.75);
     }
 
     // Destello de las neuronas que acaban de encenderse: el cambio se ve
     // como un pulso blanco-amarillo que se apaga en ~420 ms.
     const before = prev[key], after = curr[key];
-    if (!REDUCED && t < 1 && before && after) {
+    if (!diff && !REDUCED && t < 1 && before && after) {
       hctx.save();
       hctx.globalCompositeOperation = 'lighter';
       hctx.fillStyle = '#fff0bf';
@@ -941,14 +1006,16 @@
       hctx.restore();
     }
 
-    // Glow sobre las neuronas más activas
-    const top = topkData[key] || [];
+    // Glow sobre las neuronas más activas (o con mayor |Δ| en modo diferencia)
+    const top = diff ? comparison.ranked : (topkData[key] || []);
     hctx.save();
     hctx.globalCompositeOperation = 'lighter';
-    for (const [idx, v] of top) {
-      if (v <= 0) continue;
+    for (const item of top) {
+      const idx = diff ? item.neuron : item[0];
+      const v = diff ? item.delta : item[1];
+      if (diff ? Math.abs(v) < 1e-9 : v <= 0) continue;
       const cx = idx % COLS, cy = (idx / COLS) | 0;
-      hctx.globalAlpha = clamp(v / (scaleMax || 1), 0, 1) * 0.95;
+      hctx.globalAlpha = clamp(Math.abs(v) / (max || 1), 0, 1) * 0.95;
       hctx.drawImage(
         glowSprite,
         cx * CELL - CELL * 1.2,
@@ -971,8 +1038,8 @@
       hctx.restore();
     }
 
-    // Barrido al recibir un token
-    const sp = REDUCED ? 1 : clamp((now - anim.start) / 620);
+    // Barrido al recibir un token (no aplica al modo diferencia)
+    const sp = (diff || REDUCED) ? 1 : clamp((now - anim.start) / 620);
     if (sp < 1) {
       const x = sp * w;
       const g = hctx.createLinearGradient(x - 52, 0, x + 52, 0);
@@ -1199,10 +1266,14 @@
      ========================================================= */
   function renderTopk() {
     const key = `layer_${selectedLayer}`;
-    const items = topkData[key] || [];
-    const max = items.length ? Math.max(...items.map((x) => Math.abs(x[1])), 1e-6) : 1;
-    topkLayer.textContent = `capa ${selectedLayer} · valor con signo`;
-    topkEl.innerHTML = items.map(([idx, v]) => {
+    const diff = diffHeatmapActive();
+    const items = diff ? comparison.ranked : (topkData[key] || []);
+    const pairs = diff ? items.map((item) => [item.neuron, item.delta]) : items;
+    const max = pairs.length ? Math.max(...pairs.map((x) => Math.abs(x[1])), 1e-6) : 1;
+    topkLayer.textContent = diff
+      ? `capa ${selectedLayer} · Δ B − A`
+      : `capa ${selectedLayer} · valor con signo`;
+    topkEl.innerHTML = pairs.map(([idx, v]) => {
       const width = Math.max(2, Math.round(Math.abs(v) / max * 100));
       const sel = idx === selectedNeuron ? ' sel' : '';
       return `<button class="topk-row${sel}" data-neuron="${idx}">
@@ -1215,9 +1286,12 @@
 
   function selectNeuron(i) {
     selectedNeuron = i;
-    spark = [];
-    const key = `layer_${selectedLayer}`;
-    spark.push((curr[key] && curr[key][i]) || 0);
+    const diff = diffHeatmapActive();
+    spark = diff ? diffSeriesFor(i) : [];
+    if (!diff) {
+      const key = `layer_${selectedLayer}`;
+      spark.push((curr[key] && curr[key][i]) || 0);
+    }
     renderTopk();
     updateDetail();
     needsDraw = true;
@@ -1231,11 +1305,23 @@
     }
     detailEmpty.hidden = true;
     detailBody.hidden = false;
+    const diff = diffHeatmapActive();
     const key = `layer_${selectedLayer}`;
-    const v = (curr[key] && curr[key][selectedNeuron]) || 0;
+    const v = diff
+      ? comparison.values[selectedNeuron]
+      : ((curr[key] && curr[key][selectedNeuron]) || 0);
     dNeuron.textContent = selectedNeuron;
     dValue.textContent = v.toFixed(3);
-    const rank = (topkData[key] || []).findIndex((x) => x[0] === selectedNeuron);
+    dValueLabel.textContent = diff ? 'Δ B − A' : 'Valor actual';
+    sparkNote.textContent = diff
+      ? (comparison.mode === 'aligned'
+        ? 'Diferencia por token coincidente (B − A).'
+        : 'Diferencia por paso (B − A).')
+      : 'Su activación en los últimos tokens.';
+    const items = diff ? comparison.ranked : (topkData[key] || []);
+    const rank = items.findIndex((x) => (
+      diff ? x.neuron === selectedNeuron : x[0] === selectedNeuron
+    ));
     dRank.textContent =
       rank >= 0 ? `#${rank + 1} de la capa` : `fuera del Top-${META.top_k || 16}`;
     drawSpark();
@@ -1317,11 +1403,15 @@
       tooltip.style.display = 'none';
       return;
     }
-    const v = lerpVal(`layer_${selectedLayer}`, i, animT());
+    const diff = diffHeatmapActive();
+    const v = diff
+      ? comparison.values[i]
+      : lerpVal(`layer_${selectedLayer}`, i, animT());
     tooltip.style.display = 'block';
     tooltip.style.left = `${e.clientX + 14}px`;
     tooltip.style.top = `${e.clientY + 14}px`;
-    tooltip.textContent = `capa ${selectedLayer} · neurona ${i} · ${v.toFixed(3)}`;
+    tooltip.textContent =
+      `capa ${selectedLayer} · neurona ${i} · ${diff ? 'Δ ' : ''}${v.toFixed(3)}`;
   });
   heatmap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
   heatmap.addEventListener('click', (e) => {
@@ -1600,6 +1690,420 @@
     }
   }
 
+  function snapshotGeneration() {
+    return {
+      run: runSerial,
+      modelKey: report.modelKey || modelSelect.value,
+      modelLabel: report.modelLabel || modelSelect.value,
+      prompt: report.prompt,
+      tokens: capturedSteps.length,
+      layers: report.layers || META.layers,
+      neurons: report.neurons || META.neurons_per_layer,
+      steps: capturedSteps.slice(),
+    };
+  }
+
+  function layerMeans(snapshot, layer) {
+    if (!snapshot || !snapshot.steps.length) return null;
+    const n = snapshot.neurons;
+    const sums = new Float64Array(n);
+    const key = `layer_${layer}`;
+    let count = 0;
+    for (const step of snapshot.steps) {
+      const values = step.layers[key];
+      if (!values || values.length !== n) continue;
+      for (let i = 0; i < n; i++) sums[i] += values[i];
+      count++;
+    }
+    if (!count) return null;
+    for (let i = 0; i < n; i++) sums[i] /= count;
+    return { values: sums, count };
+  }
+
+  function layerAtStep(snapshot, layer, stepIndex) {
+    const step = snapshot && snapshot.steps[stepIndex];
+    if (!step) return null;
+    const values = step.layers[`layer_${layer}`];
+    if (!values || values.length !== snapshot.neurons) return null;
+    return { values, count: 1, token: step.token };
+  }
+
+  function tokenText(value) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, 24) : '␣';
+  }
+
+  function tokenKey(value) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text || null;
+  }
+
+  function alignTokens(a, b) {
+    const left = a.steps.map((step) => tokenKey(step.token));
+    const right = b.steps.map((step) => tokenKey(step.token));
+    const n = left.length, m = right.length;
+    const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = left[i] && right[j] && left[i] === right[j]
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const pairs = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (left[i] && right[j] && left[i] === right[j]) {
+        pairs.push({ a: i, b: j, token: left[i] });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        i++;
+      } else {
+        j++;
+      }
+    }
+    return pairs;
+  }
+
+  function comparableSnapshots(a, b) {
+    return Boolean(
+      a && b && a.run !== b.run &&
+      a.modelKey === b.modelKey && a.layers === b.layers && a.neurons === b.neurons
+    );
+  }
+
+  function diffHeatmapActive() {
+    return Boolean(compareHeatmap && comparison && comparison.layer === selectedLayer);
+  }
+
+  function updateHeatmapHeading() {
+    const title = document.getElementById('heatmap-title');
+    if (diffHeatmapActive()) {
+      const mode = comparison.mode === 'mean'
+        ? 'media de la generación'
+        : (comparison.mode === 'step'
+          ? `paso ${comparison.step + 1}`
+          : `token «${tokenText(comparison.aData.token)}»`);
+      title.textContent = `Diferencia B − A · Capa ${selectedLayer} · ${mode}`;
+      heatmapHint.textContent = 'Δ = B − A por neurona';
+    } else {
+      title.textContent =
+        `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+      heatmapHint.textContent = 'cada celda = una neurona';
+    }
+  }
+
+  function updateCompareOverlayButton() {
+    if (!comparison) compareHeatmap = false;
+    compareOverlayBtn.disabled = !comparison;
+    compareOverlayBtn.textContent = compareHeatmap
+      ? 'Ver heatmap actual'
+      : 'Ver diff en heatmap';
+    compareOverlayBtn.title = compareHeatmap
+      ? 'Volver a la activación de la generación actual'
+      : 'Mostrar Δ = B − A en el mapa principal';
+  }
+
+  function layerSeries(steps, layer, neuron) {
+    const key = `layer_${layer}`;
+    const out = [];
+    for (const step of steps) {
+      const value = step.layers[key] && step.layers[key][neuron];
+      if (Number.isFinite(value)) out.push(value);
+    }
+    return out;
+  }
+
+  function diffSeriesFor(neuron) {
+    if (!comparison) return [];
+    const key = `layer_${comparison.layer}`;
+    const out = [];
+    if (comparison.mode === 'aligned') {
+      for (const pair of compareAlignments) {
+        const av = comparison.a.steps[pair.a].layers[key] &&
+          comparison.a.steps[pair.a].layers[key][neuron];
+        const bv = comparison.b.steps[pair.b].layers[key] &&
+          comparison.b.steps[pair.b].layers[key][neuron];
+        if (Number.isFinite(av) && Number.isFinite(bv)) out.push(bv - av);
+      }
+      return out;
+    }
+    const count = Math.min(comparison.a.steps.length, comparison.b.steps.length);
+    for (let i = 0; i < count; i++) {
+      const av = comparison.a.steps[i].layers[key] && comparison.a.steps[i].layers[key][neuron];
+      const bv = comparison.b.steps[i].layers[key] && comparison.b.steps[i].layers[key][neuron];
+      if (Number.isFinite(av) && Number.isFinite(bv)) out.push(bv - av);
+    }
+    return out;
+  }
+
+  function setDiffHeatmap(active) {
+    const next = Boolean(active && comparison);
+    if (next === compareHeatmap) {
+      updateCompareOverlayButton();
+      return;
+    }
+    compareHeatmap = next;
+    if (selectedNeuron !== null) {
+      spark = compareHeatmap
+        ? diffSeriesFor(selectedNeuron)
+        : layerSeries(capturedSteps, selectedLayer, selectedNeuron);
+    }
+    updateHeatmapHeading();
+    renderTopk();
+    updateDetail();
+    needsDraw = true;
+    updateCompareOverlayButton();
+  }
+
+  function restoreHeatmapAfterDiff() {
+    if (!compareHeatmap) return;
+    compareHeatmap = false;
+    if (selectedNeuron !== null) {
+      spark = layerSeries(capturedSteps, selectedLayer, selectedNeuron);
+    }
+    updateHeatmapHeading();
+    renderTopk();
+    updateDetail();
+    needsDraw = true;
+    updateCompareOverlayButton();
+  }
+
+  function updateCompareControls() {
+    const hasRun = capturedSteps.length > 0;
+    saveABtn.disabled = !hasRun;
+    saveABtn.title = hasRun
+      ? 'Guardar esta generación como A para compararla con una segunda pasada'
+      : 'Genera con «todas las capas» activado para poder guardar A';
+    const current = hasRun ? snapshotGeneration() : null;
+    const canCompare = Boolean(snapshotA && current && comparableSnapshots(snapshotA, current));
+    compareBtn.disabled = !canCompare;
+    compareBtn.title = canCompare
+      ? 'Comparar A con la generación actual para la capa visible'
+      : 'Necesitas guardar A y generar B con el mismo modelo y «todas las capas»';
+  }
+
+  function clearComparison() {
+    const wasDiff = compareHeatmap;
+    comparison = null;
+    compareSnapshots = null;
+    compareStep = 'mean';
+    compareAlignments = [];
+    compareHeatmap = false;
+    comparePanel.hidden = true;
+    compareControls.hidden = true;
+    compareStepSelect.replaceChildren(new Option('Media de la generación', 'mean'));
+    compareBody.innerHTML = '';
+    updateCompareOverlayButton();
+    updateHeatmapHeading();
+    if (wasDiff) {
+      if (selectedNeuron !== null) {
+        spark = layerSeries(capturedSteps, selectedLayer, selectedNeuron);
+      }
+      renderTopk();
+      updateDetail();
+      needsDraw = true;
+    }
+  }
+
+  function populateCompareSteps(a, b) {
+    compareAlignments = alignTokens(a, b);
+    compareStep = 'mean';
+    compareStepSelect.replaceChildren(new Option('Media de la generación', 'mean'));
+
+    const byPosition = document.createElement('optgroup');
+    byPosition.label = 'Por posición';
+    const count = Math.min(a.steps.length, b.steps.length);
+    for (let i = 0; i < count; i++) {
+      const label = `Paso ${i + 1} · A «${tokenText(a.steps[i].token)}» / ` +
+        `B «${tokenText(b.steps[i].token)}»`;
+      byPosition.append(new Option(label, `pos:${i}`));
+    }
+    compareStepSelect.append(byPosition);
+
+    const byContent = document.createElement('optgroup');
+    byContent.label = `Por contenido (${compareAlignments.length})`;
+    if (compareAlignments.length) {
+      compareAlignments.forEach((pair, index) => {
+        const label = `«${tokenText(pair.token)}» · A paso ${pair.a + 1} ↔ ` +
+          `B paso ${pair.b + 1}`;
+        byContent.append(new Option(label, `lcs:${index}`));
+      });
+    } else {
+      const none = new Option('Sin tokens coincidentes', '');
+      none.disabled = true;
+      byContent.append(none);
+    }
+    compareStepSelect.append(byContent);
+
+    compareStepSelect.value = compareStep;
+    compareControls.hidden = false;
+  }
+
+  function saveSnapshotA() {
+    if (!capturedSteps.length) return;
+    clearComparison();
+    snapshotA = snapshotGeneration();
+    saveABtn.textContent = 'A guardada ✓';
+    updateCompareControls();
+    setTimeout(() => { saveABtn.textContent = 'Guardar A'; }, 1400);
+  }
+
+  function formatSigned(value) {
+    return `${value > 0 ? '+' : ''}${value.toFixed(3)}`;
+  }
+
+  function renderComparison() {
+    if (!comparison) return;
+    const c = comparison;
+    const max = c.top[0];
+    const isMean = c.mode === 'mean';
+    const isAligned = c.mode === 'aligned';
+    const label = isMean ? 'Media' : 'Activación';
+    const rows = c.top.map(({ neuron, a, b, delta }) => {
+      const signClass = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : '');
+      return `<tr><td>#${neuron}</td><td>${a.toFixed(3)}</td><td>${b.toFixed(3)}</td>` +
+        `<td class="${signClass}">${formatSigned(delta)}</td></tr>`;
+    }).join('');
+    const context = isMean
+      ? `Diferencia de la <b>media de activación por neurona</b> en la <b>capa ${c.layer}</b>. ` +
+        `No se emparejan tokens entre pasadas: se compara el promedio de cada neurona a lo largo ` +
+        `de toda la generación. ` +
+        (c.aData.count === c.bData.count
+          ? `Se promedian ${c.aData.count} pasos en cada generación.`
+          : `A promedia ${c.aData.count} pasos y B ${c.bData.count}; las longitudes distintas no se ` +
+            `emparejan.`)
+      : (isAligned
+        ? `Diferencia de activación en un <b>token coincidente por contenido</b> de la ` +
+          `<b>capa ${c.layer}</b>. ` +
+          `A: «${escapeHtml(tokenText(c.aData.token))}» (paso ${c.aStep + 1}) · ` +
+          `B: «${escapeHtml(tokenText(c.bData.token))}» (paso ${c.bStep + 1}). ` +
+          `La alineación usa la subsecuencia común más larga y respeta el orden de generación.`
+        : `Diferencia de activación en el <b>paso ${c.step + 1}</b> de la <b>capa ${c.layer}</b>. ` +
+          `A: «${escapeHtml(tokenText(c.aData.token))}» · ` +
+          `B: «${escapeHtml(tokenText(c.bData.token))}». ` +
+          `Se comparan posiciones generadas, no tokens alineados por contenido.`);
+
+    compareBody.innerHTML =
+      `<p><b>A</b>: «${escapeHtml(c.a.prompt)}» · ${c.a.tokens} tokens. ` +
+      `<b>B</b>: «${escapeHtml(c.b.prompt)}» · ${c.b.tokens} tokens.</p>` +
+      `<p>${context}</p>` +
+      (max
+        ? `<p>El mayor cambio está en la <b>neurona #${max.neuron}</b>: ` +
+          `<b>${formatSigned(max.delta)}</b> (A ${max.a.toFixed(3)} → B ${max.b.toFixed(3)}).</p>`
+        : '') +
+      `<table class="compare-table"><thead><tr><th>Neurona</th><th>${label} A</th>` +
+      `<th>${label} B</th><th>Δ (B − A)</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    compareControls.hidden = false;
+    comparePanel.hidden = false;
+    updateCompareOverlayButton();
+    updateHeatmapHeading();
+    if (diffHeatmapActive()) {
+      if (selectedNeuron !== null) spark = diffSeriesFor(selectedNeuron);
+      renderTopk();
+      updateDetail();
+      needsDraw = true;
+    }
+  }
+
+  function showComparison(a, b) {
+    compareSnapshots = { a, b };
+    comparePanel.hidden = false;
+    if (!comparableSnapshots(a, b)) {
+      comparison = null;
+      restoreHeatmapAfterDiff();
+      compareControls.hidden = true;
+      updateCompareOverlayButton();
+      updateHeatmapHeading();
+      compareBody.innerHTML =
+        '<p class="report-note">Para comparar, ambas pasadas deben usar el mismo modelo y la misma ' +
+        'arquitectura, con «todas las capas» activado en las dos.</p>';
+      return;
+    }
+    let mode = null;
+    let aStep = null;
+    let bStep = null;
+    if (compareStep === 'mean') {
+      mode = 'mean';
+    } else if (compareStep.startsWith('pos:')) {
+      const index = Number(compareStep.slice(4));
+      if (Number.isInteger(index) && index >= 0) {
+        mode = 'step';
+        aStep = index;
+        bStep = index;
+      }
+    } else if (compareStep.startsWith('lcs:')) {
+      const pair = compareAlignments[Number(compareStep.slice(4))];
+      if (pair) {
+        mode = 'aligned';
+        aStep = pair.a;
+        bStep = pair.b;
+      }
+    }
+    if (!mode) {
+      comparison = null;
+      restoreHeatmapAfterDiff();
+      compareControls.hidden = true;
+      updateCompareOverlayButton();
+      updateHeatmapHeading();
+      compareBody.innerHTML =
+        '<p class="report-note">La vista seleccionada ya no está disponible. ' +
+        'Vuelve a comparar las dos pasadas.</p>';
+      return;
+    }
+    const aData = mode === 'mean'
+      ? layerMeans(a, selectedLayer)
+      : layerAtStep(a, selectedLayer, aStep);
+    const bData = mode === 'mean'
+      ? layerMeans(b, selectedLayer)
+      : layerAtStep(b, selectedLayer, bStep);
+    if (!aData || !bData) {
+      comparison = null;
+      restoreHeatmapAfterDiff();
+      compareControls.hidden = true;
+      updateCompareOverlayButton();
+      updateHeatmapHeading();
+      compareBody.innerHTML =
+        '<p class="report-note">No hay activaciones capturadas para la capa o el paso ' +
+        'seleccionados en ambas pasadas.</p>';
+      return;
+    }
+    const diffs = [];
+    const values = new Float64Array(a.neurons);
+    let maxAbs = 0;
+    for (let i = 0; i < a.neurons; i++) {
+      const av = aData.values[i];
+      const bv = bData.values[i];
+      const delta = bv - av;
+      values[i] = delta;
+      maxAbs = Math.max(maxAbs, Math.abs(delta));
+      diffs.push({ neuron: i, a: av, b: bv, delta });
+    }
+    diffs.sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
+    comparison = {
+      a, b, layer: selectedLayer,
+      mode,
+      step: mode === 'step' ? aStep : null,
+      aStep, bStep,
+      aData, bData, values, maxAbs,
+      top: diffs.slice(0, 12),
+      ranked: diffs.slice(0, Math.max(1, META.top_k || 16)),
+    };
+    renderComparison();
+  }
+
+  function compareCurrent() {
+    if (!snapshotA || !capturedSteps.length) return;
+    const current = snapshotGeneration();
+    clearComparison();
+    compareStep = 'mean';
+    populateCompareSteps(snapshotA, current);
+    showComparison(snapshotA, current);
+    comparePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   function applyStep(data) {
     prev = curr;
     curr = {};
@@ -1612,8 +2116,7 @@
 
     const stepLayer = Number.isInteger(data.layer) ? data.layer : selectedLayer;
     selectedLayer = clamp(stepLayer, 0, META.layers - 1);
-    document.getElementById('heatmap-title').textContent =
-      `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+    updateHeatmapHeading();
 
     if (META.capture_all) {
       const layers = {};
@@ -1834,6 +2337,7 @@
         report.modelKey = data.model || modelSelect.value;
         report.layers = META.layers;
         report.neurons = META.neurons_per_layer;
+        updateCompareControls();
         renderReport();
         streamEl.innerHTML = '';
         promptEcho.textContent = data.chat ? '' : data.prompt;
@@ -1893,6 +2397,7 @@
           exportCsvBtn.title =
             `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`;
         }
+        updateCompareControls();
         renderReport();
         statusEl.textContent = data.stopped === 'limit'
           ? `Generación terminada: se alcanzó el límite de ${report.requested} tokens.`
@@ -1916,6 +2421,7 @@
     if (!ws || ws.readyState !== WebSocket.OPEN || running) return;
     lastErrorMessage = '';
     running = true;
+    runSerial += 1;
     sendBtn.disabled = true;
     setBadge('loading', 'generando…');
     statusEl.textContent = 'Generando… si el modelo no estaba cargado, la primera vez puede tardar varios minutos.';
@@ -1947,6 +2453,9 @@
     capturedSteps = [];
     exportCsvBtn.disabled = true;
     exportCsvBtn.textContent = 'CSV capa';
+    saveABtn.textContent = 'Guardar A';
+    clearComparison();
+    updateCompareControls();
     renderReport();
 
     ws.send(JSON.stringify({
@@ -1959,6 +2468,16 @@
   }
 
   exportCsvBtn.addEventListener('click', downloadLayerCsv);
+  saveABtn.addEventListener('click', saveSnapshotA);
+  compareBtn.addEventListener('click', compareCurrent);
+  compareExitBtn.addEventListener('click', clearComparison);
+  compareStepSelect.addEventListener('change', () => {
+    compareStep = compareStepSelect.value;
+    if (compareSnapshots) showComparison(compareSnapshots.a, compareSnapshots.b);
+  });
+  compareOverlayBtn.addEventListener('click', () => {
+    setDiffHeatmap(!compareHeatmap);
+  });
 
   copyReportBtn.addEventListener('click', async () => {
     const text = reportEl.innerText;

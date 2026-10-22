@@ -323,7 +323,16 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   `server.py` (no depende del directorio de trabajo), EOS se compara contra un `set` para admitir
   `eos_token_id` escalar o lista, y las etiquetas del overview/detalle usan el `top_k` del servidor. El
   panel ordena por activación con signo y lo explicita para no confundirlo con la magnitud.
-- **Comparar prompts:** guardar dos pasadas y mostrar el *diferencial* de activación (qué neuronas cambian).
+- **Comparar prompts:** **implementado** — con **todas las capas** activado, **Guardar A** conserva la
+  primera pasada y **Comparar** enfrenta la generación actual con A en la capa visible. El selector
+  **Vista** permite comparar la **media de toda la generación**, un **paso concreto por posición** o
+  un **token coincidente por contenido**. La alineación por contenido usa la subsecuencia común más
+  larga sobre texto normalizado, puede emparejar tokens en posiciones distintas y respeta el orden de
+  generación; los repetidos se emparejan en orden. No es una alineación semántica ni por subpalabras.
+  El panel muestra las 12 neuronas con mayor `|Δ|`, el signo de `B − A` y los tokens generados en cada
+  pasada. **Ver diff en heatmap** reemplaza el mapa, ranking, tooltip, detalle y sparkline por el
+  diferencial, con escala propia de `máx |Δ|`; **Ver heatmap actual** lo restaura. Cambiar de capa
+  recalcula todo. Exige el mismo modelo.
 - **Ablación interactiva:** clic en una neurona → apagarla y ver cómo cambia el texto generado.
 - **Exportar CSV:** **implementado** — la casilla **todas las capas** activa `capture_all` en el
   mensaje `generate`; el servidor envía entonces todas las capas en cada `step` y el cliente las guarda

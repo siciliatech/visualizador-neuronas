@@ -136,6 +136,12 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --capture-all
    del top-8 enviado, **todos** los parámetros de muestreo y por qué terminó la generación.
 9. Si activaste **todas las capas**, selecciona una capa y pulsa **CSV capa** para descargar sus
    activaciones de toda la generación.
+10. Para **comparar dos pasadas**, activa **todas las capas** en ambas, genera la primera y pulsa
+    **Guardar A**; después cambia el prompt o los parámetros, vuelve a generar y pulsa **Comparar**.
+    El panel muestra las 12 neuronas con mayor cambio y permite elegir entre la **media de la
+    generación**, un **paso concreto por posición** o un **token coincidente por contenido**;
+    **Ver diff en heatmap** lleva el diferencial al mapa principal. Ambas pasadas deben usar el mismo
+    modelo.
 
 Los valores iniciales del muestreo son `temperature=0.8`, `top_k=40`, `top_p=0.95`,
 `repetition_penalty=1.15` y `no_repeat_ngram=0`. `top_p=1` desactiva el filtro nucleus;
@@ -178,6 +184,43 @@ step,token,layer,neuron,activation
 El nombre incluye modelo, capa y fecha. La captura vive solo en la pestaña hasta que generes de nuevo o
 la cierres; no se escribe nada en disco en el servidor. Activar todas las capas aumenta el payload de
 cada `step` (y la memoria del navegador), así que conviene usarlo solo cuando se vaya a exportar.
+
+### Comparar dos pasadas
+
+La comparación reutiliza la captura de **todas las capas**. El flujo es:
+
+1. Activa **todas las capas** y genera la pasada A.
+2. Pulsa **Guardar A** en el informe.
+3. Cambia el prompt, los parámetros de muestreo o ambos y genera la pasada B (con **todas las capas**
+   activado).
+4. Pulsa **Comparar**. El panel muestra, para la capa visible, las 12 neuronas con mayor diferencia
+   absoluta de activación entre A y B, con sus valores y el signo de `Δ = B − A`.
+5. En **Vista** elige **Media de la generación** para comparar el promedio de todos los tokens, un
+   **paso concreto por posición** para comparar la activación de esa posición en A y B, o un
+   **token coincidente por contenido**. En los modos por paso y por token, el desplegable indica qué
+   generó cada pasada y en qué posición.
+6. Pulsa **Ver diff en heatmap** para sustituir el mapa principal por `Δ = B − A`; el ranking, el
+   tooltip, el detalle y la sparkline pasan al mismo modo. **Ver heatmap actual** lo restaura.
+7. Cambia de capa en el overview para recalcular la comparación; **Cerrar** oculta el panel.
+
+El modo **paso concreto** compara la **misma posición** de generación: si A y B generaron tokens
+distintos, la tabla muestra ambos para que la comparación sea explícita. Solo se ofrecen pasos
+presentes en las dos pasadas. El modo **por contenido** empareja tokens con el mismo texto mediante la
+**subsecuencia común más larga**: puede comparar un token que aparece en posiciones distintas y
+respeta el orden de generación; los tokens repetidos se emparejan en orden. Es una coincidencia exacta
+del texto normalizado (sin espacios perimetrales), no una alineación semántica ni por subpalabras. Si
+no hay tokens coincidentes, el grupo aparece deshabilitado. El modo **media** promedia por neurona a lo
+largo de todos los tokens generados y permite comparar longitudes distintas, pero no distingue en qué
+token ocurrió el cambio. Solo se comparan pasadas del mismo modelo y arquitectura; el botón
+**Comparar** se desactiva hasta que exista una segunda generación después de guardar A. Guardar A y B
+mantiene ambas capturas en memoria, por lo que el uso de RAM es aproximadamente el doble que una sola
+generación con todas las capas.
+
+En el heatmap diferencial, el título indica la capa y la vista (media, paso o token), y la escala de
+color usa el **máximo `|Δ|`** de esa capa y vista, no la escala global del token actual. El ranking
+muestra las neuronas con mayor `|Δ|`; al seleccionar una, el detalle muestra `Δ B − A` y la sparkline
+dibuja la diferencia por paso o por token coincidente. El botón **Ver diff en heatmap** solo está
+disponible mientras el panel de comparación tiene datos.
 
 ## Endpoints
 
@@ -324,3 +367,8 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
   atención no consuman demasiada RAM.
 - **Exportación completa:** activar **todas las capas** aumenta el payload de cada `step` y la memoria
   del navegador; el CSV se descarga de una capa a la vez. En modo normal no se paga ese coste.
+- **Comparación:** guardar A y B conserva dos capturas completas en memoria. El modo **media** compara
+  promedios por neurona; el modo **paso** compara la misma posición, aunque los tokens generados sean
+  distintos; el modo **contenido** empareja texto idéntico con una subsecuencia común más larga. Los
+  tokens repetidos se emparejan en orden y las subpalabras o equivalencias semánticas no se alinean.
+  El diff en el heatmap tiene su propia escala (`máx |Δ|`).
