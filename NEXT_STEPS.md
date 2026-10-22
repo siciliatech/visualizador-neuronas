@@ -4,11 +4,10 @@ Estado actual: `server.py` + `index.html` corren GPT-2 / Qwen2.5-0.5B-Instruct /
 PyTorch + **TransformerLens 4.2** (`TransformerBridge`), enganchando la activación **real por neurona**
 de la MLP de cada capa con el hook estándar `blocks.{i}.mlp.hook_post` y enviándola por WebSocket al heatmap.
 
-Este documento cubre tres ampliaciones independientes:
+Este documento resume dos cambios principales, ambos implementados:
 
 1. [Dockerizar](#1-dockerizar) — **implementado**
 2. [Migrar a TransformerLens](#2-migrar-a-transformerlens) — **implementado**
-3. [Migrar a nnsight](#3-migrar-a-nnsight)
 
 Al final hay una sección de [mejoras pendientes](#4-mejoras-pendientes).
 
@@ -102,32 +101,7 @@ docker compose down              # los modelos quedan en el volumen hf-models
 docker compose down -v           # borra también los modelos (se re-descargarán)
 ```
 
-### Variante GPU (opcional)
-
-Cambiar la base y la rueda de torch, y activar la GPU en compose:
-
-```dockerfile
-FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04
-RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
-# torch con CUDA (índice por defecto ya trae la build cu) + resto de dependencias
-COPY requirements.txt ./
-RUN pip install --break-system-packages torch \
- && pip install --break-system-packages -r requirements.txt
-```
-
-```yaml
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-```
-
 Notas:
-- Si se usa GPU conviene cargar el modelo en `float16`/`bfloat16` (`AutoModelForCausalLM.from_pretrained(..., dtype=torch.float16)`)
-  para aprovechar la VRAM; en CPU dejar `float32`.
 - Para muchos usuarios concurrentes, los hooks globales (`activations` compartido) se pisan entre conexiones.
   Habría que usar un `LanguageModel`/hooks **por conexión** o serializar las generaciones.
 - Solo hace falta exponer el puerto 8000; la UI se sirve desde el mismo proceso (`GET /`).
@@ -205,60 +179,7 @@ logits_b = bridge.run_with_hooks(
 ```
 
 **A tener en cuenta:** el bridge soporta un conjunto de arquitecturas verificadas (no cualquiera de
-Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin cargar pesos. Si necesitas
-un modelo exótico, nnsight es más flexible.
-
----
-
-## 3. Migrar a nnsight
-
-**Qué es:** librería que envuelve un modelo Hugging Face **sin convertirlo** y permite leer/modificar
-activaciones con sintaxis Python dentro de un contexto `trace()`. Su ventaja única: puede ejecutarse
-**contra modelos remotos** (NDIF), p. ej. LLaMA-70B, sin GPU local.
-
-**Instalación:** `pip install nnsight`
-
-**Lectura de neuronas (mismo ejemplo que arriba):**
-
-```python
-from nnsight import LanguageModel
-
-model = LanguageModel("Qwen/Qwen2.5-0.5B-Instruct", device_map="cpu", dispatch=True)
-
-with model.trace(prompt):
-    neurons = model.model.layers[3].mlp.act_fn.output.save()   # [1, seq, d_mlp]
-
-print(neurons.value[0, -1, :])   # últimas activaciones por neurona de la capa 3
-```
-
-**Intervención:**
-
-```python
-with model.trace(prompt):
-    acts = model.model.layers[11].mlp.act_fn.output
-    acts[:, :, 2910] = 0.0        # apagar la neurona 2910
-    out = model.lm_head.output.save()
-```
-
-**Modelos grandes sin GPU (NDIF):**
-
-```python
-big = LanguageModel("meta-llama/Meta-Llama-3.1-70B-Instruct", remote=True)
-with big.trace(prompt):
-    neurons = big.model.layers[40].mlp.act_fn.output.save()
-```
-
-**Cómo encaja aquí:** igual que TransformerLens, reemplaza los hooks manuales dentro de `server.py`, pero
-además abre la puerta a modelos enormes (con `remote=True`) manteniendo *algún* acceso a activaciones, algo
-que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen latencia y cuota.
-
-**Comparativa rápida para decidir:**
-
-| Necesidad | Herramienta |
-|---|---|
-| Ver neuronas con el mínimo cambio | `transformers` (actual) |
-| Experimentar: ablar, parchear, buscar circuitos | TransformerLens |
-| Modelos arbitrarios de HF o gigantes remotos | nnsight |
+Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin cargar pesos.
 
 ---
 
@@ -304,6 +225,14 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
 - **Atención honesta:** **implementado** — la leyenda y el tooltip aclaran que solo se dibuja el top-8
   por cabeza; las celdas restantes llevan un punto tenue para no confundirlas con atención cero. Los
   tokens especiales de los modelos chat se etiquetan con su nombre real en vez de quedar en blanco.
+- **Ayuda contextual:** **implementado** — cada control de la barra superior tiene un icono **?** que abre
+  un popover accesible (teclado, `aria-expanded`, cierre con Esc o clic fuera) con qué es, para qué sirve
+  y un consejo. Los textos están en el objeto `HELP` de `index.html`.
+- **Escala del heatmap:** **implementado** — la casilla **escala por capa** ajusta los colores al máximo
+  absoluto de la capa visible para distinguir activaciones pequeñas frente a valores atípicos. La
+  escala global sigue siendo el valor por defecto y permite comparar magnitudes entre capas; el cambio
+  es solo visual y no altera valores, rankings, informes ni exportaciones. En el modo diff se mantiene
+  la escala propia de `máx |Δ|`.
 - **Canvas y retina:** **implementado** — el heatmap y la animación se limitan a ~30 fps, la atención
   solo se redibuja cuando cambia y los canvas escalan su backing store por `devicePixelRatio` (máximo
   2×) manteniendo el tamaño CSS.
@@ -353,5 +282,6 @@ que Groq/Ollama no permiten. La limitación es que las trazas remotas tienen lat
   `token BYTE_ARRAY (UTF8)`, `layer INT32`, `neuron INT32` y `activation FLOAT`. El modo normal
   mantiene el payload de una sola capa. La preparación es en memoria y pide confirmación si el archivo
   estimado supera los 2 millones de filas.
-- **Rendimiento:** el servidor mantiene un solo modelo en RAM y serializa las generaciones. Para
-  paralelismo real habría que aislar el bridge/caché por conexión.
+- **Concurrencia:** el servidor mantiene un solo modelo en RAM y serializa las generaciones; el segundo
+  cliente espera en cola. Este comportamiento es deliberado para el uso local y evita duplicar el
+  consumo de memoria.

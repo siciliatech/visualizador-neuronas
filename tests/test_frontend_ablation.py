@@ -187,3 +187,42 @@ def test_ablation_reutiliza_la_semilla_y_actualiza_el_detalle(page):
     report = page.locator("#report").inner_text()
     assert "Ablación activa" in report
     assert "semilla=123" in report
+
+
+@pytest.mark.ui
+def test_escala_por_capa_mejora_visibilidad_sin_cambiar_escala_global(page):
+    meta = _meta()
+    meta["layers"] = 2
+    _emit(page, meta)
+
+    step = _step(2.0, "a")
+    step["stats"]["max_abs"] = {"value": 100.0, "layer": 1, "neuron": 0}
+    _emit(page, step)
+    _emit(page, _done("a"))
+
+    page.wait_for_function(
+        "document.querySelector('#heatmap-scale')?.textContent === 'global · 100.00'"
+    )
+    page.locator("#layer-scale").check()
+    page.wait_for_function(
+        "document.querySelector('#heatmap-scale')?.textContent === 'capa 0 · 2.00'"
+    )
+    assert page.locator("#layer-scale").is_checked()
+
+
+@pytest.mark.ui
+def test_iconos_de_ayuda_abren_y_cierran_el_popover(page):
+    pop = page.locator("#help-pop")
+    assert pop.is_hidden()
+
+    page.locator('[data-help="top_k"]').click()
+    assert pop.is_visible()
+    assert "Top-k" in pop.inner_text()
+    assert page.locator('[data-help="top_k"]').get_attribute("aria-expanded") == "true"
+
+    page.keyboard.press("Escape")
+    assert pop.is_hidden()
+
+    page.locator('[data-help="mode"]').click()
+    page.locator("h1").click()
+    assert pop.is_hidden()

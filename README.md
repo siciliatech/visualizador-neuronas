@@ -140,9 +140,12 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
 3. Ajusta el muestreo: `mode` (muestreo/greedy), `temperature`, `top_k`, `top_p`,
    `repetition_penalty` y `no_repeat_ngram`. Si vas a exportar varias capas, marca **todas las capas**
    en «Exportar» antes de generar.
-4. Pulsa **Generar**.
+4. Pulsa **Generar**. Si no conoces un control, pulsa su icono **?** (Modelo, Prompt, Tokens,
+   Muestreo, Temp, Top-k, Top-p, Rep. penalty, N-grama, Exportar): se abre una explicación breve de qué
+   es y para qué sirve; se cierra con clic fuera o Esc.
 5. En el heatmap, **clic en una fila** del overview (izquierda) para seleccionar la capa mostrada;
-   pasa el ratón por el heatmap para ver capa/neurona/valor exactos.
+   pasa el ratón por el heatmap para ver capa/neurona/valor exactos. La casilla **escala por capa**
+   ajusta los colores al máximo de la capa visible si una activación extrema aplana el mapa.
 6. Haz **clic en una neurona** del heatmap o del ranking para ver su valor, su posición y su
    **historial de activación token a token**. El panel «¿Qué estoy viendo?» resume la interpretación.
 7. En el panel de **atención**, elige una cabeza (`c0`…`c13`) o haz clic en su fila del mapa para ver
@@ -169,8 +172,12 @@ Los valores iniciales del muestreo son `temperature=0.8`, `top_k=40`, `top_p=0.9
 Junto al botón **Generar** hay un badge con el estado del modelo: `sin cargar`, `cargando …`
 (descarga/carga los pesos la primera vez) y `listo`. El mensaje bajo los controles da el detalle.
 
-La escala de color es **global al paso** (0 → máximo absoluto del paso, mostrado bajo el heatmap), con
-los valores negativos en azul. La leyenda indica el valor `0` y el máximo.
+Por defecto, la escala de color es **global al paso** (0 → máximo absoluto del paso), con los valores
+negativos en azul. **Escala por capa** usa el máximo absoluto de la capa visible y ayuda a distinguir
+activaciones pequeñas cuando otra capa tiene un valor atípico. La leyenda muestra el máximo usado.
+Con esta opción los colores ya no permiten comparar magnitudes entre capas; los valores numéricos,
+el ranking, el informe y las exportaciones no cambian. En el modo diff la escala propia de `máx |Δ|`
+se mantiene y la opción queda desactivada.
 
 El overview y el ranking de neuronas ordenan por el **valor de activación con signo** (de mayor a
 menor); el ancho de las barras usa `|v|` solo como escala visual. El informe, en cambio, busca la mayor
@@ -424,14 +431,16 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
 | `.github/workflows/ci.yml` | CI con Python 3.12, caché de Hugging Face, Ruff, tests unitarios y prueba de frontend con Chromium |
 | `plan-mejoras.md` | Plan incremental de mejoras y prioridades |
 | `Dockerfile` / `docker-compose.yml` | Empaquetado con volumen para la caché de modelos |
-| `NEXT_STEPS.md` | Roadmap (Docker, TransformerLens, nnsight) y mejoras pendientes |
+| `NEXT_STEPS.md` | Estado de Docker, TransformerLens y mejoras pendientes |
 
 ## Limitaciones conocidas
 
 - **Generaciones en serie:** el modelo es compartido y solo una generación corre a la vez; un segundo
-  cliente recibe `queued` y espera. Las activaciones y la atención ya son locales y no se mezclan; para
-  paralelismo real habría que aislar también el bridge/caché por conexión.
-- **Escala global:** un valor atípico en una capa puede aplanar el resto (no hay normalización por capa).
+  cliente recibe `queued` y espera. Las activaciones y la atención son locales a cada generación y no
+  se mezclan.
+- **Escala visual:** la escala global permite comparar capas, pero un valor atípico puede aplanar el
+  resto. La casilla **escala por capa** mejora el contraste dentro de la capa visible a cambio de que
+  los colores de capas distintas ya no sean comparables.
 - **Atención:** se envían las **8 conexiones más fuertes** por cabeza (no la matriz completa) para
   mantener ligero el payload; el resto se marca con un punto y no significa atención cero.
 - **Prompts largos:** el prompt se recorta a sus **últimos 512 tokens** para que los patrones de

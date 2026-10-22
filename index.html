@@ -91,6 +91,28 @@
   }
   .control input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
   .control.grow { flex: 1 1 300px; }
+  .label-row { display: flex; align-items: center; gap: 5px; }
+  .help {
+    width: 16px; height: 16px; padding: 0; flex: 0 0 auto; cursor: pointer;
+    display: inline-grid; place-items: center; border-radius: 50%;
+    border: 1px solid rgba(148, 163, 184, .4); background: rgba(148, 163, 184, .08);
+    color: var(--muted); font: 700 .62rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height: 1; transition: color .15s, border-color .15s, background .15s;
+  }
+  .help:hover, .help[aria-expanded="true"] {
+    color: var(--accent); border-color: var(--accent); background: rgba(34, 211, 238, .12);
+  }
+  .help:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #help-pop {
+    position: fixed; z-index: 60; width: min(310px, calc(100vw - 24px));
+    padding: 12px 14px; border-radius: 12px; font-size: .8rem; line-height: 1.45;
+    color: var(--muted); background: rgba(8, 15, 28, .97);
+    border: 1px solid rgba(34, 211, 238, .35); box-shadow: 0 18px 45px -12px #000;
+  }
+  #help-pop[hidden] { display: none; }
+  #help-pop h3 { margin: 0 0 6px; font-size: .86rem; color: var(--text); }
+  #help-pop p { margin: 5px 0 0; }
+  #help-pop b { color: var(--accent); font-weight: 700; }
   input[type=text], input[type=number], select {
     background: #121d31; border: 1px solid rgba(148, 163, 184, .26);
     border-radius: 10px; color: var(--text); font: inherit; padding: 9px 11px;
@@ -166,6 +188,12 @@
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     margin-top: 10px; font-size: .68rem; color: var(--dim);
   }
+  .scale-toggle {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--muted); white-space: nowrap; cursor: pointer;
+  }
+  .scale-toggle input { width: 14px; height: 14px; accent-color: var(--accent); }
+  .scale-toggle input:disabled { cursor: not-allowed; }
   .gradient {
     flex: 1; min-width: 90px; height: 9px; border-radius: 99px;
     box-shadow: 0 0 14px rgba(34, 211, 238, .22);
@@ -418,46 +446,46 @@
 
 <section class="controls card">
   <div class="control">
-    <label for="model">Modelo</label>
+    <div class="label-row"><label for="model">Modelo</label><button type="button" class="help" data-help="model" aria-label="Ayuda: Modelo" aria-expanded="false">?</button></div>
     <select id="model" title="Modelo"></select>
   </div>
   <div class="control grow">
-    <label for="prompt">Prompt</label>
+    <div class="label-row"><label for="prompt">Prompt</label><button type="button" class="help" data-help="prompt" aria-label="Ayuda: Prompt" aria-expanded="false">?</button></div>
     <input id="prompt" type="text" value="¿Qué cosas te puedo preguntar?" placeholder="Escribe un prompt…">
   </div>
   <div class="control">
-    <label for="tokens">Tokens</label>
+    <div class="label-row"><label for="tokens">Tokens</label><button type="button" class="help" data-help="tokens" aria-label="Ayuda: Tokens" aria-expanded="false">?</button></div>
     <input id="tokens" type="number" value="40" min="1" max="100" title="Tokens a generar">
   </div>
   <div class="control">
-    <label for="mode">Muestreo</label>
+    <div class="label-row"><label for="mode">Muestreo</label><button type="button" class="help" data-help="mode" aria-label="Ayuda: Muestreo" aria-expanded="false">?</button></div>
     <select id="mode" title="Muestreo">
       <option value="sample">muestreo</option>
       <option value="greedy">greedy</option>
     </select>
   </div>
   <div class="control">
-    <label for="temperature">Temp</label>
+    <div class="label-row"><label for="temperature">Temp</label><button type="button" class="help" data-help="temperature" aria-label="Ayuda: Temp" aria-expanded="false">?</button></div>
     <input id="temperature" type="number" value="0.8" step="0.1" min="0" title="temperature">
   </div>
   <div class="control">
-    <label for="top_k">Top-k</label>
+    <div class="label-row"><label for="top_k">Top-k</label><button type="button" class="help" data-help="top_k" aria-label="Ayuda: Top-k" aria-expanded="false">?</button></div>
     <input id="top_k" type="number" value="40" min="0" title="top_k (0 = sin filtro)">
   </div>
   <div class="control">
-    <label for="top_p">Top-p</label>
+    <div class="label-row"><label for="top_p">Top-p</label><button type="button" class="help" data-help="top_p" aria-label="Ayuda: Top-p" aria-expanded="false">?</button></div>
     <input id="top_p" type="number" value="0.95" step="0.05" min="0" max="1" title="top_p (1 = sin filtro nucleus)">
   </div>
   <div class="control">
-    <label for="rep_penalty">Rep. penalty</label>
+    <div class="label-row"><label for="rep_penalty">Rep. penalty</label><button type="button" class="help" data-help="rep_penalty" aria-label="Ayuda: Rep. penalty" aria-expanded="false">?</button></div>
     <input id="rep_penalty" type="number" value="1.15" step="0.05" min="1" title="repetition_penalty">
   </div>
   <div class="control">
-    <label for="no_repeat_ngram">N-grama</label>
+    <div class="label-row"><label for="no_repeat_ngram">N-grama</label><button type="button" class="help" data-help="no_repeat_ngram" aria-label="Ayuda: N-grama" aria-expanded="false">?</button></div>
     <input id="no_repeat_ngram" type="number" value="0" step="1" min="0" max="10" title="no_repeat_ngram: prohíbe repetir secuencias de N tokens (0 o 1 = desactivado; N≥2 activo)">
   </div>
   <div class="control">
-    <label for="capture_all">Exportar</label>
+    <div class="label-row"><label for="capture_all">Exportar</label><button type="button" class="help" data-help="capture_all" aria-label="Ayuda: Exportar" aria-expanded="false">?</button></div>
     <label class="check" title="Captura todas las capas para poder descargar cualquiera de ellas en CSV o Parquet al terminar">
       <input id="capture_all" type="checkbox"> todas las capas
     </label>
@@ -467,6 +495,8 @@
     <span id="model-badge" class="badge idle" title="Estado del modelo">sin cargar</span>
   </div>
 </section>
+
+<div id="help-pop" role="dialog" aria-live="polite" hidden></div>
 
 <div class="statusbar"><span id="status">Conectando…</span></div>
 
@@ -493,7 +523,11 @@
     <div class="legend">
       <span style="color:#60a5fa">neg</span>
       <span class="gradient"></span>
-      <span>máx</span>
+      <label class="scale-toggle" title="Escala cada capa por su propia activación máxima. Los colores dejan de ser comparables entre capas.">
+        <input id="layer-scale" type="checkbox">
+        escala por capa
+      </label>
+      <span id="heatmap-scale">global · —</span>
     </div>
   </section>
 
@@ -832,6 +866,8 @@
   const topkLayer = document.getElementById('topk-layer');
   const tooltip = document.getElementById('tooltip');
   const scaleMaxEl = document.getElementById('scale-max');
+  const layerScaleInput = document.getElementById('layer-scale');
+  const heatmapScaleEl = document.getElementById('heatmap-scale');
   const sendBtn = document.getElementById('send');
   const promptInput = document.getElementById('prompt');
   const tokensInput = document.getElementById('tokens');
@@ -1048,7 +1084,17 @@
     const diff = diffHeatmapActive();
     const t = diff ? 1 : animT();
     const n = META.neurons_per_layer;
-    const max = diff ? comparison.maxAbs : scaleMax;
+    const layerScale = layerScaleInput.checked && !diff;
+    let max = diff ? comparison.maxAbs : scaleMax;
+    if (layerScale) {
+      max = 1e-6;
+      for (let i = 0; i < n; i++) {
+        max = Math.max(max, Math.abs(lerpVal(key, i, t)));
+      }
+    }
+    heatmapScaleEl.textContent = diff
+      ? `Δ · ${max.toFixed(2)}`
+      : `${layerScale ? `capa ${selectedLayer}` : 'global'} · ${max.toFixed(2)}`;
 
     for (let i = 0; i < n; i++) {
       const cx = i % COLS;
@@ -1067,7 +1113,7 @@
       for (let i = 0; i < n; i++) {
         const d = (after[i] || 0) - (before[i] || 0);
         if (d <= 0) continue;
-        const k = d / (scaleMax || 1);
+        const k = d / (max || 1);
         if (k < 0.10) continue;
         const cx = i % COLS, cy = (i / COLS) | 0;
         hctx.globalAlpha = Math.min(.85, k * 1.7 * (1 - t));
@@ -2468,7 +2514,9 @@
 
   function updateHeatmapHeading() {
     const title = document.getElementById('heatmap-title');
-    if (diffHeatmapActive()) {
+    const isDiff = diffHeatmapActive();
+    layerScaleInput.disabled = isDiff;
+    if (isDiff) {
       const mode = comparison.mode === 'mean'
         ? 'media de la generación'
         : (comparison.mode === 'step'
@@ -3234,6 +3282,9 @@
   compareOverlayBtn.addEventListener('click', () => {
     setDiffHeatmap(!compareHeatmap);
   });
+  layerScaleInput.addEventListener('change', () => {
+    needsDraw = true;
+  });
 
   copyReportBtn.addEventListener('click', async () => {
     const text = reportEl.innerText;
@@ -3245,6 +3296,124 @@
     }
     setTimeout(() => { copyReportBtn.textContent = 'Copiar'; }, 1500);
   });
+
+  /* =========================================================
+     Ayuda contextual de los controles
+     ========================================================= */
+  const HELP = {
+    model: {
+      title: 'Modelo',
+      what: 'El modelo de lenguaje que va a escribir el texto y cuyas neuronas vas a observar.',
+      why: 'Cada modelo tiene distinto tamaño y entrenamiento: Qwen2.5-Instruct responde preguntas; GPT-2 y Pythia continúan el texto que escribas.',
+      tip: 'Solo hay uno cargado a la vez. La primera vez que elijas uno se descarga y puede tardar varios minutos.',
+    },
+    prompt: {
+      title: 'Prompt',
+      what: 'El texto de entrada que le das al modelo: una pregunta o el inicio de una frase.',
+      why: 'Es el punto de partida. El modelo lo lee y genera, token a token, lo que sigue.',
+      tip: 'Con Qwen escribe una pregunta; con GPT-2 o Pythia escribe el comienzo de un texto. Pulsa Enter para generar.',
+    },
+    tokens: {
+      title: 'Tokens',
+      what: 'Un token es una pieza mínima de texto: una palabra, un trozo de palabra o un signo.',
+      why: 'Define cuántos tokens nuevos genera el modelo (1 a 100). Más tokens = respuesta más larga y más pasos para observar.',
+      tip: 'Para explorar, 20–40 suele alcanzar. Cada token produce una actualización del mapa.',
+    },
+    mode: {
+      title: 'Muestreo',
+      what: 'La forma de elegir el siguiente token entre los que el modelo considera posibles.',
+      why: '«muestreo» elige con algo de azar (respuestas variadas). «greedy» elige siempre el más probable (respuesta determinista).',
+      tip: 'Usa greedy para comparar o ablacionar: el resultado es repetible y fácil de interpretar. En greedy, Temp, Top-k y Top-p no tienen efecto.',
+    },
+    temperature: {
+      title: 'Temp (temperature)',
+      what: 'Cuánto azar introduce el muestreo al elegir el siguiente token.',
+      why: 'Baja (≈0.2): respuestas previsibles y conservadoras. Alta (≈1.5 o más): más creatividad, pero también más errores.',
+      tip: '0 equivale a greedy. El valor inicial es 0.8.',
+    },
+    top_k: {
+      title: 'Top-k',
+      what: 'Limita la elección a los k tokens más probables.',
+      why: 'Descarta opciones muy improbables para que el texto no se desvíe. Con k=1 siempre elige el más probable.',
+      tip: '0 desactiva el filtro. El valor inicial es 40.',
+    },
+    top_p: {
+      title: 'Top-p (nucleus)',
+      what: 'Conserva los tokens más probables hasta que sumen esa probabilidad (por ejemplo, 95 %).',
+      why: 'Como Top-k, evita opciones raras, pero se adapta: considera pocos tokens si el modelo está seguro y más si duda.',
+      tip: '1 desactiva el filtro. El valor inicial es 0.95.',
+    },
+    rep_penalty: {
+      title: 'Rep. penalty (penalización por repetición)',
+      what: 'Resta atractivo a los tokens que ya aparecieron en el texto.',
+      why: 'Evita que el modelo se quede repitiendo las mismas palabras o frases en bucle.',
+      tip: '1 no penaliza; valores de 1.1 a 1.3 suelen funcionar bien. Muy altos vuelven el texto errático. Inicial: 1.15.',
+    },
+    no_repeat_ngram: {
+      title: 'N-grama (no repetir secuencias)',
+      what: 'Prohíbe repetir una misma secuencia de N tokens seguidos.',
+      why: 'Es una regla más estricta que Rep. penalty contra los bucles: con N=3 ninguna secuencia de 3 tokens se repite.',
+      tip: '0 o 1 lo desactivan; desde 2 está activo. Inicial: 0.',
+    },
+    capture_all: {
+      title: 'Exportar · todas las capas',
+      what: 'Guarda las activaciones de todas las capas del modelo, no solo la que estás viendo.',
+      why: 'Es necesario para descargar CSV o Parquet de cualquier capa y para comparar dos pasadas (A vs B).',
+      tip: 'Aumenta el tráfico y la memoria del navegador; actívalo solo si vas a exportar o comparar.',
+    },
+  };
+  const helpPop = document.getElementById('help-pop');
+  let helpOpener = null;
+
+  function closeHelp(restoreFocus = false) {
+    if (helpPop.hidden) return;
+    helpPop.hidden = true;
+    if (helpOpener) {
+      helpOpener.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) helpOpener.focus();
+      helpOpener = null;
+    }
+  }
+
+  function openHelp(button) {
+    const info = HELP[button.dataset.help];
+    if (!info) return;
+    closeHelp();
+    helpPop.replaceChildren();
+    const title = document.createElement('h3');
+    title.textContent = info.title;
+    helpPop.append(title);
+    for (const [label, text] of [['Qué es', info.what], ['Para qué sirve', info.why], ['Consejo', info.tip]]) {
+      const p = document.createElement('p');
+      const b = document.createElement('b');
+      b.textContent = `${label}: `;
+      p.append(b, text);
+      helpPop.append(p);
+    }
+    helpPop.hidden = false;
+    const r = button.getBoundingClientRect();
+    const width = helpPop.offsetWidth;
+    const left = clamp(r.left, 12, Math.max(12, window.innerWidth - width - 12));
+    helpPop.style.left = `${left}px`;
+    helpPop.style.top = `${r.bottom + 8}px`;
+    button.setAttribute('aria-expanded', 'true');
+    helpOpener = button;
+  }
+
+  document.addEventListener('click', (e) => {
+    const button = e.target.closest('.help');
+    if (button) {
+      if (button === helpOpener) closeHelp();
+      else openHelp(button);
+      return;
+    }
+    if (!helpPop.contains(e.target)) closeHelp();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeHelp(true);
+  });
+  window.addEventListener('resize', () => closeHelp());
+  window.addEventListener('scroll', () => closeHelp(), { passive: true });
 
   sendBtn.addEventListener('click', send);
   promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
