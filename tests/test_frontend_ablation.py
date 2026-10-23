@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import http.server
+import math
 import threading
 from pathlib import Path
 
@@ -246,7 +247,7 @@ def test_forma_del_mapa_conserva_la_seleccion_de_neuronas(page, shape):
           };
         }"""
     )
-    assert all(isinstance(value, (int, float)) for value in point.values())
+    assert all(isinstance(value, (int, float)) and math.isfinite(value) for value in point.values())
     page.mouse.click(point["x"], point["y"])
     assert page.evaluate("selectedNeuron") == 1
     # Todas las neuronas tienen una celda propia y distinta.
