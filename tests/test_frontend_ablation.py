@@ -238,7 +238,7 @@ def test_forma_del_mapa_conserva_la_seleccion_de_neuronas(page, shape):
     page.locator("#heatmap-shape").select_option(shape)
     point = page.evaluate(
         """() => {
-          const i = 7;
+          const i = 1;
           const r = heatmap.getBoundingClientRect();
           return {
             x: r.left + (layout.xs[i] + 0.5) * CELL * r.width / canvasW(heatmap),
@@ -246,8 +246,9 @@ def test_forma_del_mapa_conserva_la_seleccion_de_neuronas(page, shape):
           };
         }"""
     )
+    assert all(isinstance(value, (int, float)) for value in point.values())
     page.mouse.click(point["x"], point["y"])
-    assert page.evaluate("selectedNeuron") == 7
+    assert page.evaluate("selectedNeuron") == 1
     # Todas las neuronas tienen una celda propia y distinta.
     assert page.evaluate(
         "new Set(Array.from(layout.xs, (x, i) => x + ',' + layout.ys[i])).size"
