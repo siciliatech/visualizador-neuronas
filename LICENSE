@@ -1,0 +1,27 @@
+Visualizador de activación neuronal
+Copyright (c) Sicilia Labs
+
+Esta obra está licenciada bajo la licencia Creative Commons
+Atribución-NoComercial 4.0 Internacional (CC BY-NC 4.0).
+
+Resumen (no sustituye al texto legal):
+
+  Eres libre de:
+    - Compartir: copiar y redistribuir el material en cualquier medio o formato.
+    - Adaptar: remezclar, transformar y construir a partir del material.
+
+  Bajo los siguientes términos:
+    - Atribución: debes dar crédito a Sicilia Labs, proporcionar un enlace a la
+      licencia e indicar si se realizaron cambios.
+    - NoComercial: no puedes utilizar el material con fines comerciales.
+    - Sin restricciones adicionales: no puedes aplicar términos legales ni medidas
+      tecnológicas que restrinjan a otros hacer lo que la licencia permite.
+
+Texto legal completo:
+  https://creativecommons.org/licenses/by-nc/4.0/legalcode.es
+Resumen legible:
+  https://creativecommons.org/licenses/by-nc/4.0/deed.es
+
+El software y los modelos de terceros que utiliza este proyecto (torch,
+transformers, transformer-lens, fastapi, Qwen2.5, GPT-2, Pythia, etc.) están
+sujetos a sus propias licencias.

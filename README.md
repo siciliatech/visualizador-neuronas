@@ -1,12 +1,98 @@
 # Visualizador de activación neuronal
 
-Herramienta de **interpretabilidad mecanicista**: mientras un transformer genera texto token a token,
-captura la activación **real de las neuronas de la MLP** de cada capa y la pinta en vivo en un heatmap
-que se envía al navegador por WebSocket.
+**Mira dentro de un modelo de lenguaje mientras escribe.** Esta herramienta local muestra, en vivo y en
+el navegador, qué neuronas se encienden en cada capa de un transformer cuando genera texto palabra por
+palabra, en qué palabras se fija (atención) y qué pasa si se apaga una neurona (ablación).
 
-No entrena ni guarda cambios en el modelo: solo *mira hacia dentro* con **TransformerLens** y muestra lo
-que ve. La ablación interactiva es una intervención temporal en memoria: apaga una neurona durante una
-generación y retira el hook al terminar.
+Está pensada para **enseñar y explorar** cómo funciona un modelo de lenguaje, también para personas sin
+formación en IA: cada control tiene un icono **?** con una explicación breve, y hay una
+[guía para docentes](docs/guia-docente.md) y un [guion de video](docs/guion-video.md).
+
+Técnicamente es una herramienta de **interpretabilidad mecanicista**: captura la activación **real de
+las neuronas de la MLP** con **TransformerLens** y la envía al navegador por WebSocket. No entrena ni
+modifica el modelo; la ablación es una intervención temporal en memoria que se retira al terminar.
+
+## Qué ofrece
+
+| Función | Para qué sirve |
+|---|---|
+| **Mapa de neuronas** | Cada celda es una neurona de la capa elegida; el color indica cuánto se enciende. Forma a elección: cuadrícula, cerebro o chip (decorativa) |
+| **Recorrido por capas** | Ranking de las neuronas más activas de cada capa; un clic cambia la capa visible |
+| **Atención explicada** | En qué palabras anteriores se fija cada «cabeza», con una frase de lectura en lenguaje llano |
+| **Ayudas contextuales** | Icono **?** en cada control y gráfico, con qué es y para qué sirve |
+| **Ablación** | Apaga una neurona y compara el texto generado con y sin ella (con semilla reproducible) |
+| **Comparación A/B** | Compara las activaciones de dos generaciones distintas |
+| **Informe** | Resumen en lenguaje claro de lo ocurrido en cada generación |
+| **Exportación** | Descarga las activaciones en CSV o Parquet |
+
+## Contenido
+
+[Inicio rápido](#inicio-rápido) · [Hardware](#hardware-necesario) · [Cómo funciona](#cómo-funciona) ·
+[Modelos](#modelos-incluidos) · [Instalación](#instalación) · [Uso](#uso) ·
+[Desarrollo](#desarrollo) · [Documentación](#documentación-adicional) · [Licencia](#licencia)
+
+## Inicio rápido
+
+Necesitas **Python 3.10 o superior**, unos **4 GB de RAM libres** y **~3 GB de disco** (ver
+[hardware](#hardware-necesario)). No hace falta GPU.
+
+```bash
+# 1. Entorno virtual
+python3 -m venv .venv
+source .venv/bin/activate                # Windows: .venv\Scripts\activate
+
+# 2. Dependencias (torch CPU primero para evitar descargar CUDA, ~3 GB)
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+pip install -r requirements.txt
+
+# 3. Arrancar
+uvicorn server:app --port 8000
+```
+
+Abre <http://localhost:8000>, escribe un prompt y pulsa **Generar**. **La primera vez** el modelo se
+descarga desde Hugging Face (~1 GB para Qwen) y la primera generación tarda varios minutos; las
+siguientes arrancan al instante porque el modelo queda en la caché local.
+
+> Con Docker: `docker compose up --build` y abre <http://localhost:8000> (ver [Con Docker](#con-docker)).
+>
+> Para usarlo en clase sin conexión, genera una vez con cada modelo **antes** para que queden descargados.
+
+## Hardware necesario
+
+El visualizador corre **en CPU**, sin GPU. Lo que más pesa es la memoria del modelo cargado.
+
+| Recurso | Mínimo | Recomendado |
+|---|---|---|
+| **Memoria RAM total** | 8 GB | 16 GB |
+| **Procesador** | 4 núcleos, 64 bits (x86-64 o ARM/Apple Silicon) | 8 núcleos o más |
+| **Disco libre** | 3 GB | 5 GB (si usas los 3 modelos) |
+| **GPU** | No necesaria | No necesaria |
+| **Sistema operativo** | macOS, Linux o Windows con Python 3.10+ | macOS, Linux o Windows (WSL2) |
+| **Navegador** | Chrome, Edge, Firefox o Safari recientes | Chrome o Edge |
+| **Red** | Solo para la primera descarga de cada modelo | — |
+
+**Memoria que usa el servidor** (medida en el proceso, sin contar el navegador ni el sistema):
+
+| Modelo | Tras cargar | Pico con 512 tokens |
+|---|---|---|
+| GPT-2 (124M) | ~1,2 GB | ~1,4 GB |
+| Qwen2.5-0.5B-Instruct | ~2,3 GB | ~2,7 GB |
+| Pythia-410m | no medido; estimado 2–3 GB (410M parámetros en `float32`) | no medido |
+
+Solo hay **un modelo cargado a la vez**: al cambiar de modelo se descarga el anterior. Por eso 8 GB
+alcanzan, pero el navegador y el sistema también consumen: con 8 GB conviene cerrar otras aplicaciones.
+
+**Disco:** ~1 GB de dependencias de Python (con torch CPU) + ~1 GB por Qwen, ~550 MB por GPT-2 y ~1 GB
+por Pythia. Docker suma la imagen (~1,5 GB).
+
+**Memoria del navegador:** la exportación con **todas las capas** y la comparación A/B guardan las
+activaciones en el navegador. Para generaciones largas puede llegar a cientos de MB; guardar A y B
+duplica ese consumo.
+
+**Velocidad orientativa:** en un Apple M5 (10 núcleos, 16 GB), Qwen2.5-0.5B genera 40 tokens en unos
+**19 segundos** (incluye capturar y enviar todas las activaciones); GPT-2 es varias veces más rápido. En
+un procesador de menos núcleos o más antiguo espera tiempos mayores. Una sola generación a la vez: no
+está pensado para varios usuarios simultáneos.
 
 ## Cómo funciona
 
@@ -41,34 +127,45 @@ agotar la RAM. La primera vez que se usa un modelo, Hugging Face lo descarga a l
 conexión puede tardar varios minutos. El servidor avisa con un mensaje `loading` y la UI muestra
 `cargando …` mientras tanto.
 
-## Requisitos
-
-- Python 3.10+ (el `Dockerfile` usa 3.14).
-- **RAM:** ~2 GB libres para GPT-2 y ~4 GB para Qwen2.5-0.5B. Medido en el proceso servidor:
-  - GPT-2: ~1,2 GB de RSS tras cargar y ~1,4 GB de pico con un prompt de 512 tokens.
-  - Qwen2.5-0.5B: ~2,3 GB tras cargar y ~2,7 GB de pico con 512 tokens.
-  - El `docker-compose.yml` limita el contenedor a **6 GB** para dejar margen al modelo y al resto del proceso.
-- ~1 GB de disco por modelo descargado (Qwen ~1 GB, GPT-2 ~550 MB).
-- No requiere GPU (corre en CPU con `float32`).
-
 ## Instalación
 
+Resumen en [Inicio rápido](#inicio-rápido). Detalles:
+
+- **Python 3.10+.** El `Dockerfile` usa 3.14 y la CI 3.12. Comprueba tu versión con `python3 --version`.
+- **`torch` primero, desde el índice CPU.** Evita las ruedas con CUDA (~3 GB) que `pip` bajaría por
+  defecto. Si ya tienes `torch` instalado, `pip install -r requirements.txt` lo reutiliza.
+- Las versiones de `requirements.txt` están fijadas y se probaron con `transformer-lens 4.2.0`.
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate                # Windows: .venv\Scripts\activate
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 pip install -r requirements.txt
 ```
 
-> `torch` desde el índice CPU reduce mucho el tamaño de la instalación (evita las ruedas con CUDA):
-> `pip install --index-url https://download.pytorch.org/whl/cpu torch`
+### Si algo falla
+
+| Síntoma | Causa probable y solución |
+|---|---|
+| `ModuleNotFoundError: transformer_lens` | No instalaste `requirements.txt` o el entorno virtual no está activo |
+| La primera generación «no avanza» | Se está descargando el modelo; mira el estado `cargando …` y espera |
+| `MemoryError` o el sistema se pone lento | Falta RAM: cierra aplicaciones o usa **GPT-2**, que consume menos |
+| El puerto 8000 está ocupado | Arranca con otro puerto: `uvicorn server:app --port 8001` |
+| La página carga pero dice «desconectado» | El servidor no está corriendo o abriste el HTML como archivo; entra por `http://localhost:8000` |
+| Sin internet en el aula | Descarga los modelos antes: genera una vez con cada uno con conexión |
 
 ## Arranque
 
 ```bash
-uvicorn server:app --host 0.0.0.0 --port 8000
+uvicorn server:app --port 8000                    # solo tu equipo (recomendado)
+uvicorn server:app --host 0.0.0.0 --port 8000     # visible para otros equipos de la red (p. ej. un aula)
 ```
 
 Abre <http://localhost:8000>. La primera generación tardará lo que tarde en descargar el modelo.
+
+> La aplicación **no tiene autenticación**. Con `--host 0.0.0.0` cualquiera en tu red puede usarla y
+> consumir la CPU y la RAM del equipo; úsalo solo en redes de confianza. Docker publica el puerto 8000
+> en todas las interfaces por defecto.
 
 ### Con Docker
 
@@ -433,6 +530,8 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
 | `scripts/smoke_ws.py` | Prueba de humo del WebSocket (`meta`/`layer`/`step`/`done`) |
 | `tests/` | Tests unitarios de muestreo, truncado, decodificación incremental y tokens especiales, validación de mensajes, bucle de generación con KV cache, ablación, cambio de capa por WebSocket, `/health` y tamaño de payload; `test_integration_slow.py` carga GPT-2 real y `test_frontend_ablation.py` prueba la UI con un WebSocket simulado |
 | `.github/workflows/ci.yml` | CI con Python 3.12, caché de Hugging Face, Ruff, tests unitarios y prueba de frontend con Chromium |
+| `LICENSE` | Licencia CC BY-NC 4.0 (uso educativo y no comercial) |
+| `docs/` | [Guía para docentes](docs/guia-docente.md) (4 actividades) y [guion de video](docs/guion-video.md) (3 min), con prompts y neuronas verificados con Qwen2.5-0.5B |
 | `plan-mejoras.md` | Plan incremental de mejoras y prioridades |
 | `Dockerfile` / `docker-compose.yml` | Empaquetado con volumen para la caché de modelos |
 | `NEXT_STEPS.md` | Estado de Docker, TransformerLens y mejoras pendientes |
@@ -462,3 +561,28 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
   distintos; el modo **contenido** empareja texto idéntico con una subsecuencia común más larga. Los
   tokens repetidos se emparejan en orden y las subpalabras o equivalencias semánticas no se alinean.
   El diff en el heatmap tiene su propia escala (`máx |Δ|`).
+
+## Documentación adicional
+
+| Documento | Contenido |
+|---|---|
+| [docs/guia-docente.md](docs/guia-docente.md) | Cuatro actividades de aula con prompts y neuronas verificados |
+| [docs/guion-video.md](docs/guion-video.md) | Guion de un video de 3 minutos para mostrar la herramienta |
+| [NEXT_STEPS.md](NEXT_STEPS.md) | Estado de Docker, TransformerLens y mejoras implementadas |
+| [plan-mejoras.md](plan-mejoras.md) | Estado del plan de mejoras y alcance deliberado |
+
+## Licencia
+
+© Sicilia Labs. Este proyecto se publica con fines **educativos** bajo la licencia
+**[Creative Commons Atribución-NoComercial 4.0 Internacional (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/deed.es)**.
+
+- ✅ Puedes usarlo, copiarlo, adaptarlo y compartirlo para enseñar, aprender e investigar.
+- ✅ Debes **atribuir** la autoría a Sicilia Labs e indicar si hiciste cambios.
+- ❌ **No** puedes usarlo con fines comerciales sin permiso.
+
+Texto completo en [LICENSE](LICENSE).
+
+**Software y modelos de terceros.** La licencia cubre el código de este repositorio. Las dependencias
+(`torch`, `transformers`, `transformer-lens`, `fastapi`, etc.) y los modelos que se descargan de Hugging
+Face (Qwen2.5, GPT-2, Pythia) tienen **sus propias licencias**, que no cambian por estar aquí. Revisa los
+términos de cada uno antes de un uso fuera del ámbito educativo.
