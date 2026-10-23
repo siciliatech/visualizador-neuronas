@@ -26,6 +26,9 @@ models/
 .env
 .env.*
 
+# Plan de investigación interno (no forma parte de la publicación)
+RESEARCH_PLAN.md
+
 # Logs
 *.log
 

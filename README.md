@@ -1,8 +1,16 @@
 # Visualizador de activación neuronal
 
+[![CI](https://github.com/siciliatech/visualizador-neuronas/actions/workflows/ci.yml/badge.svg)](https://github.com/siciliatech/visualizador-neuronas/actions/workflows/ci.yml)
+
 **Mira dentro de un modelo de lenguaje mientras escribe.** Esta herramienta local muestra, en vivo y en
 el navegador, qué neuronas se encienden en cada capa de un transformer cuando genera texto palabra por
 palabra, en qué palabras se fija (atención) y qué pasa si se apaga una neurona (ablación).
+
+![Interfaz del visualizador: mapa de neuronas en forma de cerebro, ranking de activaciones y detalle de la neurona seleccionada](docs/img/interfaz.png)
+
+*Qwen2.5-0.5B-Instruct generando «El mar es un espectáculo inestimable…». El mapa muestra la capa 19 con
+la forma de cerebro; el ranking y el panel derecho usan las activaciones reales de la MLP.*
+
 
 Está pensada para **enseñar y explorar** cómo funciona un modelo de lenguaje, también para personas sin
 formación en IA: cada control tiene un icono **?** con una explicación breve, y hay una
@@ -288,6 +296,12 @@ se fijan en palabras distintas), una frase de **Lectura** que resume en palabras
 quedan fuera de ese top-8 llevan un punto tenue: no son atención cero y el tooltip lo indica como
 «fuera del top-8». Los tokens especiales de los modelos chat (`<|im_start|>`, `<|endoftext|>`, etc.) se
 etiquetan con su nombre en lugar de mostrarse como un espacio.
+
+![Panel de atención: la cabeza c9 de la capa 19 se fija en «que», «ía», «aleza», «y» e «idad» al decidir el siguiente token](docs/img/atencion.png)
+
+*La misma generación, cabeza `c9` de la capa 19. La frase de lectura traduce las conexiones más fuertes
+a lenguaje llano; el mapa de la derecha muestra las 14 cabezas de la capa.*
+
 
 Los canvas se dibujan a la resolución de `devicePixelRatio` (limitada a **2×** para no disparar el coste
 en pantallas 3×) y la animación se limita a **~30 fps**. Así la atención no se redibuja en cada frame y
