@@ -4,7 +4,9 @@
 
 **Mira dentro de un modelo de lenguaje mientras escribe.** Esta herramienta local muestra, en vivo y en
 el navegador, qué neuronas se encienden en cada capa de un transformer cuando genera texto palabra por
-palabra, en qué palabras se fija (atención) y qué pasa si se apaga una neurona (ablación).
+palabra, en qué palabras se fija (atención) y qué pasa si se apaga una neurona (ablación). También
+soporta modelos **MoE** (Mixture of Experts): muestra qué **expertos** elige el router en cada capa y
+cuánto cómputo se ahorra (sin ahorrar memoria).
 
 ![Interfaz del visualizador: mapa de neuronas en forma de cerebro, ranking de activaciones y detalle de la neurona seleccionada](docs/img/interfaz.png)
 
@@ -24,12 +26,14 @@ modifica el modelo; la ablación es una intervención temporal en memoria que se
 
 | Función | Para qué sirve |
 |---|---|
+| **Punto de partida** | «¿Qué querés hacer?» propone dos recorridos: explorar un modelo o preparar una comparación A/B. Cada tarjeta muestra un resumen y despliega los pasos con **Ver más**; el recorrido de comparación activa la captura necesaria |
 | **Mapa de neuronas** | Cada celda es una neurona de la capa elegida; el color indica cuánto se enciende. Forma a elección: cuadrícula, cerebro o chip (decorativa) |
-| **Recorrido por capas** | Ranking de las neuronas más activas de cada capa; un clic cambia la capa visible |
+| **Ruteo MoE** | En modelos Mixture of Experts, cada celda es un experto y el brillo es el peso que le dio el router; incluye carga acumulada y parámetros activos |
+| **Recorrido por capas** | Ranking de las neuronas —o expertos— más activos de cada capa; un clic cambia la capa visible |
 | **Atención explicada** | En qué palabras anteriores se fija cada «cabeza», con una frase de lectura en lenguaje llano |
 | **Ayudas contextuales** | Icono **?** en cada control y gráfico, con qué es y para qué sirve |
-| **Ablación** | Apaga una neurona y compara el texto generado con y sin ella (con semilla reproducible) |
-| **Comparación A/B** | Compara las activaciones de dos generaciones distintas |
+| **Ablación** | Apaga una neurona —o quita un experto del ruteo— y compara el texto generado con y sin la intervención (con semilla reproducible) |
+| **Comparación A/B** | Compara dos generaciones: diff por neurona/experto si es el mismo modelo, o métricas normalizadas (cómputo y ruteo) si son modelos o arquitecturas distintas |
 | **Informe** | Resumen en lenguaje claro de lo ocurrido en cada generación |
 | **Exportación** | Descarga las activaciones en CSV o Parquet |
 
@@ -73,7 +77,7 @@ El visualizador corre **en CPU**, sin GPU. Lo que más pesa es la memoria del mo
 |---|---|---|
 | **Memoria RAM total** | 8 GB | 16 GB |
 | **Procesador** | 4 núcleos, 64 bits (x86-64 o ARM/Apple Silicon) | 8 núcleos o más |
-| **Disco libre** | 3 GB | 5 GB (si usas los 3 modelos) |
+| **Disco libre** | 3 GB | 5 GB (si usas los 4 modelos) |
 | **GPU** | No necesaria | No necesaria |
 | **Sistema operativo** | macOS, Linux o Windows con Python 3.10+ | macOS, Linux o Windows (WSL2) |
 | **Navegador** | Chrome, Edge, Firefox o Safari recientes | Chrome o Edge |
@@ -86,12 +90,13 @@ El visualizador corre **en CPU**, sin GPU. Lo que más pesa es la memoria del mo
 | GPT-2 (124M) | ~1,2 GB | ~1,4 GB |
 | Qwen2.5-0.5B-Instruct | ~2,3 GB | ~2,7 GB |
 | Pythia-410m | no medido; estimado 2–3 GB (410M parámetros en `float32`) | no medido |
+| Mixtral 8xTiny (MoE) | < 1 GB (0,5M parámetros + overhead de `transformers`) | no medido |
 
 Solo hay **un modelo cargado a la vez**: al cambiar de modelo se descarga el anterior. Por eso 8 GB
 alcanzan, pero el navegador y el sistema también consumen: con 8 GB conviene cerrar otras aplicaciones.
 
-**Disco:** ~1 GB de dependencias de Python (con torch CPU) + ~1 GB por Qwen, ~550 MB por GPT-2 y ~1 GB
-por Pythia. Docker suma la imagen (~1,5 GB).
+**Disco:** ~1 GB de dependencias de Python (con torch CPU) + ~1 GB por Qwen, ~550 MB por GPT-2, ~1 GB
+por Pythia y unos pocos MB por Mixtral 8xTiny. Docker suma la imagen (~1,5 GB).
 
 **Memoria del navegador:** la exportación con **todas las capas** y la comparación A/B guardan las
 activaciones en el navegador. Para generaciones largas puede llegar a cientos de MB; guardar A y B
@@ -109,26 +114,35 @@ prompt ──▶ server.py (FastAPI)
              │  1. carga el modelo con TransformerBridge.boot_transformers
              │  2. prefill con run_with_cache; cada token nuevo reutiliza el KV cache
              │  3. guarda la activación del ÚLTIMO token (d_mlp floats)
+             │     o, en capas MoE, el peso del router por experto + el top-k elegido
              │  4. atención de la última query: top-8 conexiones por cabeza
-             ▼  WebSocket /ws  →  {delta, layer, activations (capa visible), stats, top, attention}
+             ▼  WebSocket /ws  →  {delta, layer, activations, stats, top, attention, routing}
         index.html (canvas)
-             │  overview: Top-16 neuronas por activación con signo (clic para seleccionar capa)
-             │  heatmap:  todas las neuronas de la capa seleccionada
+             │  overview: Top-16 neuronas/expertos por valor con signo (clic para cambiar de capa)
+             │  heatmap:  todas las neuronas o expertos de la capa seleccionada
+             │  ruteo MoE: expertos por capa, carga acumulada y parámetros activos
              │  atención: conexiones reales por cabeza + mapa de cabezas
-             └  top-k / detalle de neurona / stream de texto
+             └  top-k / detalle / stream de texto / informe
 ```
 
 La neurona capturada es la **post-activación de la MLP** (antes de `down_proj`). En arquitecturas con
 compuerta (Qwen/LLaMA/Gemma) ese hook ya es `act(gate_proj(x)) * up_proj(x)`, es decir la **neurona
-completa**, no solo la compuerta.
+completa**, no solo la compuerta. En una capa MoE la unidad visualizable no es una neurona interna: es
+el **experto**, representado por el peso que el router le asigna al último token.
 
 ## Modelos incluidos
 
-| Clave | Modelo | Uso |
-|---|---|---|
-| `qwen2.5-0.5b-instruct` (por defecto) | Qwen2.5-0.5B-Instruct | responde preguntas (chat template) |
-| `gpt2` | GPT-2 base (124M) | continúa texto |
-| `pythia-410m` | EleutherAI Pythia-410m | continúa texto |
+| Clave | Modelo | Arquitectura | Uso |
+|---|---|---|---|
+| `qwen2.5-0.5b-instruct` (por defecto) | Qwen2.5-0.5B-Instruct | densa | responde preguntas (chat template) |
+| `gpt2` | GPT-2 base (124M) | densa | continúa texto |
+| `pythia-410m` | EleutherAI Pythia-410m | densa | continúa texto |
+| `mixtral-tiny` | `yujiepan/mixtral-8xtiny-random` | **MoE** (8 expertos, top-k aprendido) | observar ruteo; los pesos son aleatorios |
+
+> **Sobre `mixtral-tiny`:** es un modelo **didáctico y sin entrenar**. No produce texto coherente: sirve
+> para ver el mecanismo MoE con 2 capas, `d_model=8`, 8 expertos y ~0,5M de parámetros, sin GPU. El
+> router real de Mixtral, OLMoE o un denso de 8B queda para una fase con GPU (ver
+> [Limitaciones conocidas](#limitaciones-conocidas)).
 
 Se carga **un solo modelo en memoria** a la vez: al cambiar de modelo se descarga el anterior para no
 agotar la RAM. La primera vez que se usa un modelo, Hugging Face lo descarga a la caché local; según la
@@ -240,13 +254,19 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
 
 ## Uso
 
+Al abrir la página, la sección **¿Qué querés hacer?** propone dos recorridos: **Ver un modelo
+trabajando** (exploración libre) y **Comparar dos pasadas**. Cada tarjeta arranca colapsada con un
+resumen y un botón **Ver más** que despliega los pasos. El recorrido de comparación activa «todas las
+capas» por vos y recuerda los pasos: generar A, pulsar **Guardar A**, generar B y pulsar **Comparar**.
+La elección solo prepara la interfaz; no genera nada por sí sola.
+
 1. Elige el **modelo** en el desplegable.
 2. Escribe un **prompt** y el número de **tokens** a generar (1–100).
 3. Ajusta el muestreo: `mode` (muestreo/greedy), `temperature`, `top_k`, `top_p`,
-   `repetition_penalty` y `no_repeat_ngram`. Si vas a exportar varias capas, marca **todas las capas**
-   en «Exportar» antes de generar.
+   `repetition_penalty` y `no_repeat_ngram`. Si vas a exportar varias capas o comparar dos pasadas,
+   marca **todas las capas** en «Capturar todo» antes de generar.
 4. Pulsa **Generar**. Si no conoces un control, pulsa su icono **?** (Modelo, Prompt, Tokens,
-   Muestreo, Temp, Top-k, Top-p, Rep. penalty, N-grama, Exportar): se abre una explicación breve de qué
+   Muestreo, Temp, Top-k, Top-p, Rep. penalty, N-grama, Capturar todo): se abre una explicación breve de qué
    es y para qué sirve; se cierra con clic fuera o Esc.
 5. En el heatmap, **clic en una fila** del overview (izquierda) para seleccionar la capa mostrada;
    pasa el ratón por el heatmap para ver capa/neurona/valor exactos. La casilla **escala por capa**
@@ -254,12 +274,14 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
    selector **Forma** reparte las neuronas en una cuadrícula (por defecto), un cerebro o un chip;
    es solo decorativo: el lugar de cada neurona en el dibujo es arbitrario.
 6. Haz **clic en una neurona** del heatmap o del ranking para ver su valor, su posición y su
-   **historial de activación token a token**. El panel «¿Qué estoy viendo?» resume la interpretación.
+   **historial de activación token a token**. En un modelo MoE, cada celda es un **experto** y el valor
+   es el peso que le dio el router. El panel «¿Qué estoy viendo?» se adapta a la arquitectura.
 7. En el panel de **atención**, elige una cabeza (`c0`…`c13`) o haz clic en su fila del mapa para ver
    sus conexiones más fuertes con los tokens anteriores.
-8. Al terminar, el **informe** explica en lenguaje claro qué pasó: capa y neurona con mayor
+8. Al terminar, el **informe** explica en lenguaje claro qué pasó: capa y neurona (o experto) con mayor
    |activación| (magnitud y signo), capa con mayor media de |activación|, atención más fuerte dentro
-   del top-8 enviado, **todos** los parámetros de muestreo y por qué terminó la generación.
+   del top-8 enviado, **todos** los parámetros de muestreo y por qué terminó la generación. En MoE añade
+   el reparto de cómputo activo y una lectura del ruteo.
 9. Si activaste **todas las capas**, pulsa **CSV capa** para descargar la capa visible, **CSV todas**
    para descargar todas las capas en un único CSV o **Parquet** para descargar todas las capas en formato
    columnar.
@@ -268,9 +290,10 @@ python scripts/smoke_ws.py --model gpt2 --tokens 2 --layer 0 --ablate 0:100
     El panel muestra las 12 neuronas con mayor cambio y permite elegir entre la **media de la
     generación**, un **paso concreto por posición** o un **token coincidente por contenido**;
     **Ver diff en heatmap** lleva el diferencial al mapa principal. Ambas pasadas deben usar el mismo
-    modelo.
+    modelo y la misma arquitectura; comparar un denso contra un MoE todavía no está disponible.
 11. Para probar una neurona, selecciónala y pulsa **Ablar y regenerar**: se repite la pasada normal con
-    esa neurona MLP forzada a cero y el panel compara el texto base con el ablacionado.
+    esa neurona MLP forzada a cero y el panel compara el texto base con el ablacionado. En MoE el botón
+    es **Apagar experto y regenerar** y el experto se quita del ruteo.
 
 Los valores iniciales del muestreo son `temperature=0.8`, `top_k=40`, `top_p=0.95`,
 `repetition_penalty=1.15` y `no_repeat_ngram=0`. `top_p=1` desactiva el filtro nucleus;
@@ -307,7 +330,7 @@ Los canvas se dibujan a la resolución de `devicePixelRatio` (limitada a **2×**
 en pantallas 3×) y la animación se limita a **~30 fps**. Así la atención no se redibuja en cada frame y
 la vista se mantiene nítida en pantallas retina sin subir el uso de CPU.
 
-### Ablar una neurona
+### Ablar una neurona (o un experto)
 
 La ablación permite pasar de *ver* una neurona a *intervenirla*. Después de una generación normal,
 selecciona una neurona en el heatmap o en el ranking y pulsa **Ablar y regenerar** en el panel
@@ -345,6 +368,46 @@ mismo. Para una lectura más simple, `greedy` sigue siendo la opción recomendad
 > `greedy` es más fácil de interpretar. La ablación apaga una neurona, no hace *activation patching* ni
 > sustituye una activación por la de otro prompt.
 
+### Modelos MoE: expertos y ruteo
+
+En un transformer **denso**, todas las neuronas de la MLP se computan en cada token. En un modelo
+**MoE** (Mixture of Experts) la capa contiene varios expertos y un **router** elige unos pocos
+(`top-k`) por token; los demás no se computan. El visualizador adapta el mapa cuando el modelo cargado
+es MoE:
+
+- **La unidad del heatmap es el experto**, no una neurona interna. El valor de cada celda es el **peso
+  que el router le dio al último token** (0 si no fue elegido). En `mixtral-tiny` hay 8 expertos por
+  capa y se eligen 2.
+- El panel **Ruteo MoE** dibuja una grilla `capas × expertos` con los elegidos encendidos, muestra la
+  fracción `top-k / n_experts`, la **carga acumulada** durante la generación (qué expertos se repiten y
+  cuáles quedan sin usar) y una estimación de **parámetros activos por token**.
+- El ranking, el detalle, el tooltip, la exportación y el informe cambian sus etiquetas a «experto».
+  En la exportación la columna sigue llamándose `neuron`, pero contiene el índice de experto.
+
+El backend captura `blocks.{i}.mlp.hook_expert_indices` y `blocks.{i}.mlp.hook_expert_weights`, que en
+TransformerLens 4.2 entregan `[tokens, top_k]` y `[tokens, n_experts]`. A diferencia del modo denso, en
+MoE **no** se usa `pos_slice=-1`: ese recorte confunde la dimensión de expertos con la de secuencia y
+dejaría los hooks mal recortados. `blocks.i.mlp.hook_post` no se usa para el mapa porque en MoE devuelve
+`d_model` (la salida del bloque), no `d_mlp`.
+
+**Qué significa «activo».** `active_params` estima los parámetros que participan por token descontando
+los expertos no elegidos; no es una medición de tiempo ni de energía. En `mixtral-tiny` da ~98 % porque
+los expertos son una fracción mínima del total: el dato es correcto, pero poco ilustrativo. En un MoE
+grande la fracción baja y el ahorro de cómputo se vuelve visible. **La memoria no baja**: todos los
+expertos siguen cargados aunque no se usen; lo que se ahorra es cómputo, no RAM/VRAM.
+
+**Ablación de experto.** El botón **Apagar experto y regenerar** pone a cero el peso de ese experto en
+`hook_expert_weights`. TransformerLens vuelve a derivar el top-k desde el tensor editado, así que el
+router elige al siguiente mejor experto y la intervención quita al experto de la decisión (no solo
+escala su salida). Consecuencia esperada: si el experto alternativo no estaba en el top-k original, el
+segundo slot puede quedar con peso `0`. La semilla, el prompt y el muestreo se reutilizan igual que en
+la ablación densa.
+
+**Qué NO hace todavía.** La comparación A/B exige el mismo modelo, capas y unidades; **no** compara un
+denso contra un MoE. Esa comparación cross-model necesita métricas normalizadas (ruteo, cómputo activo,
+entropía) y quedó para la fase 2. Tampoco hay soporte GPU en esta versión: OLMoE, Mixtral real o un
+denso de 8B no entran en el objetivo de 16 GB de RAM/CPU.
+
 ### Exportar activaciones
 
 La generación normal envía solo la capa visible para mantener el payload pequeño. Para exportar cualquier
@@ -355,7 +418,7 @@ capa, marca **todas las capas** antes de generar: el servidor incluirá todas la
 - **CSV todas** descarga todas las capas en un único CSV, ordenado por capa, paso y neurona;
 - **Parquet** descarga todas las capas en un único archivo columnar, con el mismo orden.
 
-El CSV tiene una fila por neurona, capa y token generado:
+El CSV tiene una fila por neurona —o experto, en MoE—, capa y token generado:
 
 ```csv
 step,token,layer,neuron,activation
@@ -381,18 +444,27 @@ mayor que un Parquet típico pero sigue siendo más compacto que el CSV completo
 La comparación reutiliza la captura de **todas las capas**. El flujo es:
 
 1. Activa **todas las capas** y genera la pasada A.
-2. Pulsa **Guardar A** en el informe.
-3. Cambia el prompt, los parámetros de muestreo o ambos y genera la pasada B (con **todas las capas**
-   activado).
-4. Pulsa **Comparar**. El panel muestra, para la capa visible, las 12 neuronas con mayor diferencia
-   absoluta de activación entre A y B, con sus valores y el signo de `Δ = B − A`.
-5. En **Vista** elige **Media de la generación** para comparar el promedio de todos los tokens, un
-   **paso concreto por posición** para comparar la activación de esa posición en A y B, o un
-   **token coincidente por contenido**. En los modos por paso y por token, el desplegable indica qué
-   generó cada pasada y en qué posición.
-6. Pulsa **Ver diff en heatmap** para sustituir el mapa principal por `Δ = B − A`; el ranking, el
-   tooltip, el detalle y la sparkline pasan al mismo modo. **Ver heatmap actual** lo restaura.
-7. Cambia de capa en el overview para recalcular la comparación; **Cerrar** oculta el panel.
+2. Pulsa **Guardar A** en el informe. El comparador se abre en la pestaña **A**.
+3. Cambia el prompt, los parámetros de muestreo, el modelo o varios a la vez y genera la pasada B
+   (con **todas las capas** activado).
+4. Pulsa **Comparar**. Se abre la pestaña **Comparar** con el resultado que corresponda (ver abajo).
+5. Las pestañas **A** y **B** muestran un resumen de cada pasada por separado: modelo, arquitectura,
+   texto, tokens, parámetros totales y activos, muestreo, ablación y, en MoE, la carga de expertos por
+   capa. **Comparar** queda deshabilitada hasta que existan las dos pasadas.
+6. Cambia de capa en el overview para recalcular la comparación; **Cerrar** oculta el panel.
+
+#### Mismo modelo y arquitectura: diff por unidad
+
+Si A y B usan el mismo modelo, la misma arquitectura y el mismo número de capas y unidades, la
+pestaña **Comparar** muestra, para la capa visible, las 12 neuronas (o expertos) con mayor diferencia
+absoluta de activación entre A y B, con sus valores y el signo de `Δ = B − A`.
+
+En **Vista** elige **Media de la generación** para comparar el promedio de todos los tokens, un
+**paso concreto por posición** para comparar la activación de esa posición en A y B, o un
+**token coincidente por contenido**. En los modos por paso y por token, el desplegable indica qué
+generó cada pasada y en qué posición. Pulsa **Ver diff en heatmap** para sustituir el mapa principal
+por `Δ = B − A`; el ranking, el tooltip, el detalle y la sparkline pasan al mismo modo.
+**Ver heatmap actual** lo restaura.
 
 El modo **paso concreto** compara la **misma posición** de generación: si A y B generaron tokens
 distintos, la tabla muestra ambos para que la comparación sea explícita. Solo se ofrecen pasos
@@ -402,16 +474,32 @@ respeta el orden de generación; los tokens repetidos se emparejan en orden. Es 
 del texto normalizado (sin espacios perimetrales), no una alineación semántica ni por subpalabras. Si
 no hay tokens coincidentes, el grupo aparece deshabilitado. El modo **media** promedia por neurona a lo
 largo de todos los tokens generados y permite comparar longitudes distintas, pero no distingue en qué
-token ocurrió el cambio. Solo se comparan pasadas del mismo modelo y arquitectura; el botón
-**Comparar** se desactiva hasta que exista una segunda generación después de guardar A. Guardar A y B
-mantiene ambas capturas en memoria, por lo que el uso de RAM es aproximadamente el doble que una sola
-generación con todas las capas.
+token ocurrió el cambio.
 
 En el heatmap diferencial, el título indica la capa y la vista (media, paso o token), y la escala de
 color usa el **máximo `|Δ|`** de esa capa y vista, no la escala global del token actual. El ranking
 muestra las neuronas con mayor `|Δ|`; al seleccionar una, el detalle muestra `Δ B − A` y la sparkline
 dibuja la diferencia por paso o por token coincidente. El botón **Ver diff en heatmap** solo está
-disponible mientras el panel de comparación tiene datos.
+disponible mientras la pestaña **Comparar** tiene un diff por unidad.
+
+#### Modelo o arquitectura distintos: métricas normalizadas
+
+Comparar un denso con un MoE, o dos modelos con distinto tamaño, **no** permite alinear neuronas ni
+expertos por índice: la neurona 5 de un modelo y la 5 de otro no representan lo mismo, y en un MoE la
+unidad del heatmap es el experto, no la neurona. En ese caso la pestaña **Comparar** muestra una tabla
+de métricas normalizadas:
+
+- modelo, arquitectura, capas y unidades por capa;
+- tokens generados;
+- parámetros totales y **parámetros activos por token** con su fracción activa (en un denso la
+  fracción es 100 %; en un MoE indica el cómputo, no la memoria ocupada);
+- top-k del router, cobertura media de expertos, entropía normalizada del ruteo y peso medio del
+  experto más usado, con el detalle por capa y barras comparativas A/B.
+
+La **cobertura** es la fracción de expertos que se usó al menos una vez; la **entropía** va de 0
+(siempre el mismo experto) a 1 (reparto uniforme). En esta vista el heatmap diferencial y los
+controles de **Vista** no aplican. Guardar A y B mantiene ambas capturas en memoria, por lo que el uso
+de RAM es aproximadamente el doble que una sola generación con todas las capas.
 
 ## Endpoints
 
@@ -420,7 +508,7 @@ disponible mientras el panel de comparación tiene datos.
 | `GET` | `/` | sirve `index.html` |
 | `GET` | `/models` | catálogo de modelos disponibles (JSON) |
 | `GET` | `/health` | estado del proceso sin cargar ni descargar modelos: `{"status": "ok", "model_key": "gpt2", "ready": true}`; si no hay modelo, `model_key` es `null` y `ready` es `false` |
-| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params, seed, capture_all, ablation}` y `{type: "select_layer", layer: N}`; emite `meta` (protocolo 2, capa seleccionada, `capture_all`, `seed` y `ablation`), `step` (delta, capa visible o todas las capas si se pidió captura, `stats` globales, `top` y atención), `layer` (respuesta al cambio de capa), `done` (texto completo, texto generado y motivo de parada), `queued` y `error` |
+| `WS` | `/ws` | canal de generación: recibe `{prompt, tokens, model, params, seed, capture_all, ablation}` y `{type: "select_layer", layer: N}`; emite `meta` (protocolo 2, arquitectura, unidad, `n_experts`, `router_top_k`, `layers_meta`, `routing_available`, `active_params`, capa seleccionada, `capture_all`, `seed` y `ablation`), `step` (delta, capa visible o todas las capas si se pidió captura, `stats` globales, `top`, atención y `routing`), `layer` (respuesta al cambio de capa), `done` (texto completo, texto generado y motivo de parada), `queued` y `error` |
 
 ### Logs
 
@@ -451,7 +539,10 @@ reintentar sin recargar la página.
 ### Capa visible y payload (protocolo 2)
 
 El heatmap muestra **una sola capa**, así que el `step` ya no necesita enviar todas. `meta` declara
-`"protocol": 2` y la capa inicial (`selected_layer`). El cliente pide otra capa con:
+`"protocol": 2`, la capa inicial (`selected_layer`) y, para MoE, `"architecture": "moe"`, `"unit":
+"expert"`, `n_experts`, `router_top_k`, `layers_meta` (unidades por capa), `routing_available` y
+`active_params`. `layers_meta` permite capas híbridas: la UI consulta la unidad de cada capa en lugar de
+asumir que todas son iguales. El cliente pide otra capa con:
 
 ```json
 {"type": "select_layer", "layer": 5}
@@ -475,11 +566,30 @@ Los `step` siguientes traen solo `activations["layer_N"]`, el campo `"layer": N`
 }
 ```
 
+En MoE, `activations["layer_N"]` es el vector de pesos del router (una posición por experto) y cada
+`step` añade `routing` con la decisión del último token:
+
+```json
+"routing": {
+  "layer_0": {
+    "n_experts": 8,
+    "top_k": 2,
+    "experts": [6, 3],
+    "weights": [0.61, 0.39],
+    "entropy": 0.94
+  }
+}
+```
+
+`entropy` va de 0 (un experto concentra todo el peso) a 1 (reparto uniforme entre los top-k). El routing
+viaja fuera de `attention` para no romper el contrato anterior.
+
 Si el cliente envía `"capture_all": true`, `activations` incluye todas las capas para permitir la
 exportación CSV/Parquet; `meta` repite `capture_all` para confirmar el modo. El campo opcional
-`"ablation": {"layer": L, "neuron": N}` apaga esa neurona MLP durante la generación; `meta.ablation`
-repite la especificación aceptada o `null`. El campo opcional `"seed": N` fija el muestreo; si se omite,
-el servidor genera una semilla aleatoria y la publica en `meta.seed`.
+`"ablation": {"layer": L, "neuron": N}` apaga esa neurona MLP —o interpreta `N` como experto si la capa
+es MoE— durante la generación; `meta.ablation` repite la especificación aceptada o `null`. El campo
+opcional `"seed": N` fija el muestreo; si se omite, el servidor genera una semilla aleatoria y la
+publica en `meta.seed`.
 
 `top` y `attention` siguen siendo completos: el overview y la vista de atención no cambian al cambiar de
 capa. El clic en una fila del overview envía `select_layer`; mientras no llega la respuesta, el heatmap
@@ -528,6 +638,10 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
   test (incluyendo `top` y `attention` completos): GPT-2 ~32–36 KiB por token (antes ~258 KiB, ~8× menos)
   y Qwen2.5-0.5B ~67 KiB (antes ~0,8 MB, ~12× menos). El cambio de capa no reenvía activaciones: usa el
   último estado que ya está en el servidor.
+- **MoE:** el ruteo ocupa muy poco (`n_experts` floats por capa y token), pero en MoE no se aplica
+  `pos_slice=-1`, así que el caché conserva las posiciones de la secuencia además de los hooks de
+  ruteo. Con los modelos diminutos actuales el coste es despreciable; en un modelo grande conviene
+  revisar el pico de memoria al cachear todas las posiciones.
 - **Canvas:** el heatmap y la animación se redibujan como máximo a ~30 fps; la atención solo se redibuja
   cuando cambia (token, capa o cabeza), no en cada frame. Los canvas usan `devicePixelRatio` (máximo 2×)
   manteniendo el mismo tamaño CSS, así que se ven nítidos en retina sin multiplicar el coste por 3.
@@ -542,10 +656,10 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
 | `requirements-dev.txt` | Dependencias de desarrollo (pytest, ruff y Playwright) |
 | `pyproject.toml` | Configuración de Ruff y pytest (marcadores `slow` y `ui`) |
 | `scripts/smoke_ws.py` | Prueba de humo del WebSocket (`meta`/`layer`/`step`/`done`) |
-| `tests/` | Tests unitarios de muestreo, truncado, decodificación incremental y tokens especiales, validación de mensajes, bucle de generación con KV cache, ablación, cambio de capa por WebSocket, `/health` y tamaño de payload; `test_integration_slow.py` carga GPT-2 real y `test_frontend_ablation.py` prueba la UI con un WebSocket simulado |
+| `tests/` | Tests unitarios de muestreo, truncado, decodificación incremental y tokens especiales, validación de mensajes, bucle de generación con KV cache, ablación densa y MoE, detección de arquitectura, ruteo, parámetros activos, cambio de capa por WebSocket, `/health` y tamaño de payload; `test_integration_slow.py` carga GPT-2 real y `test_frontend_ablation.py` prueba la UI con un WebSocket simulado (incluido el panel MoE) |
 | `.github/workflows/ci.yml` | CI con Python 3.12, caché de Hugging Face, Ruff, tests unitarios y prueba de frontend con Chromium |
 | `LICENSE` | Licencia CC BY-NC 4.0 (uso educativo y no comercial) |
-| `docs/` | [Guía para docentes](docs/guia-docente.md) (4 actividades) y [guion de video](docs/guion-video.md) (3 min), con prompts y neuronas verificados con Qwen2.5-0.5B |
+| `docs/` | [Guía para docentes](docs/guia-docente.md) (5 actividades, incluida una de ruteo MoE) y [guion de video](docs/guion-video.md) (3 min), con prompts y neuronas verificados con Qwen2.5-0.5B |
 | `plan-mejoras.md` | Plan incremental de mejoras y prioridades |
 | `Dockerfile` / `docker-compose.yml` | Empaquetado con volumen para la caché de modelos |
 | `NEXT_STEPS.md` | Estado de Docker, TransformerLens y mejoras pendientes |
@@ -566,10 +680,17 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
   del navegador. **CSV todas** y **Parquet** se preparan en memoria antes de descargarlos, así que una
   generación larga con muchas capas puede consumir cientos de MB. En modo normal no se paga ese coste.
   El Parquet se escribe sin compresión para no añadir dependencias al navegador.
-- **Ablación:** apaga **una** neurona MLP por generación; no hace *activation patching* ni permite
-  apagar un grupo de neuronas. El texto puede no cambiar. La comparación usa la última pasada normal
-  como base, repite su configuración y reutiliza su semilla; si cambias el prompt o los parámetros
-  después, primero genera una nueva pasada normal.
+- **Ablación:** apaga **una** neurona MLP —o quita **un** experto del ruteo— por generación; no hace
+  *activation patching* ni permite apagar un grupo de neuronas. El texto puede no cambiar. La
+  comparación usa la última pasada normal como base, repite su configuración y reutiliza su semilla; si
+  cambias el prompt o los parámetros después, primero genera una nueva pasada normal. En MoE, si el
+  experto alternativo no estaba en el top-k original, el segundo slot puede quedar con peso `0`.
+- **MoE:** `mixtral-tiny` tiene pesos aleatorios: el texto no es coherente y el ruteo no representa el
+  de un Mixtral entrenado. La unidad del heatmap es el peso del router, no la activación interna del
+  experto. `active_params` es una **estimación** por ruteo, no una medición de latencia o energía; en
+  modelos con expertos pequeños puede dar una fracción muy alta aunque el ahorro real de cómputo sea
+  menor. La memoria no baja: solo el cómputo. La comparación cross-model denso vs MoE y los modelos MoE
+  reales (OLMoE, Mixtral) requieren GPU y quedan fuera de esta versión.
 - **Comparación:** guardar A y B conserva dos capturas completas en memoria. El modo **media** compara
   promedios por neurona; el modo **paso** compara la misma posición, aunque los tokens generados sean
   distintos; el modo **contenido** empareja texto idéntico con una subsecuencia común más larga. Los
@@ -580,7 +701,7 @@ el modelo cargado (`bridge`/`tokenizer`) es compartido.
 
 | Documento | Contenido |
 |---|---|
-| [docs/guia-docente.md](docs/guia-docente.md) | Cuatro actividades de aula con prompts y neuronas verificados |
+| [docs/guia-docente.md](docs/guia-docente.md) | Cinco actividades de aula: cuatro con neuronas verificadas y una de ruteo MoE |
 | [docs/guion-video.md](docs/guion-video.md) | Guion de un video de 3 minutos para mostrar la herramienta |
 | [NEXT_STEPS.md](NEXT_STEPS.md) | Estado de Docker, TransformerLens y mejoras implementadas |
 | [plan-mejoras.md](plan-mejoras.md) | Estado del plan de mejoras y alcance deliberado |
