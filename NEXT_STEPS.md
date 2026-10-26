@@ -3,6 +3,8 @@
 Estado actual: `server.py` + `index.html` corren GPT-2 / Qwen2.5-0.5B-Instruct / Pythia-410m en local con
 PyTorch + **TransformerLens 4.2** (`TransformerBridge`), enganchando la activación **real por neurona**
 de la MLP de cada capa con el hook estándar `blocks.{i}.mlp.hook_post` y enviándola por WebSocket al heatmap.
+También soportan **MoE**: `mixtral-tiny` captura el peso del router por experto
+(`hook_expert_weights`/`hook_expert_indices`), muestra el ruteo y permite quitar un experto del top-k.
 
 Este documento resume dos cambios principales, ambos implementados:
 
@@ -228,6 +230,11 @@ Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin ca
 - **Atención honesta:** **implementado** — la leyenda y el tooltip aclaran que solo se dibuja el top-8
   por cabeza; las celdas restantes llevan un punto tenue para no confundirlas con atención cero. Los
   tokens especiales de los modelos chat se etiquetan con su nombre real en vez de quedar en blanco.
+- **Punto de partida:** **implementado** — la sección superior «¿Qué querés hacer?» ofrece dos
+  recorridos: **Ver un modelo trabajando** (exploración) y **Comparar dos pasadas**. Cada tarjeta
+  arranca colapsada, con un resumen y **Ver más** para desplegar los pasos. El segundo recorrido activa
+  «todas las capas» por el usuario y muestra el estado; no genera nada automáticamente. Está pensado
+  para que un docente pueda empezar sin conocer la herramienta.
 - **Forma del mapa:** **implementado** — el selector **Forma** dibuja las neuronas como cuadrícula
   (por defecto), cerebro o chip. Es un adorno: cada neurona se asigna a una celda de la máscara y
   hover, clic, brillo y anillo de selección usan esa posición. No cambia valores, rankings ni exportaciones.
@@ -242,6 +249,14 @@ Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin ca
 - **Canvas y retina:** **implementado** — el heatmap y la animación se limitan a ~30 fps, la atención
   solo se redibuja cuando cambia y los canvas escalan su backing store por `devicePixelRatio` (máximo
   2×) manteniendo el tamaño CSS.
+- **Soporte MoE:** **implementado (fase 1/2)** — detección de arquitectura por hooks, unidad «experto»
+  por capa (`layers_meta`), captura de ruteo (`hook_expert_weights`/`hook_expert_indices`, sin
+  `pos_slice=-1`), panel de ruteo con carga acumulada y parámetros activos, ablación que pone a cero el
+  peso del experto y deja que TransformerLens re-derive el top-k. Modelo incluido: `mixtral-tiny`
+  (`yujiepan/mixtral-8xtiny-random`, pesos aleatorios). El **comparador cross-model** está implementado
+  en el cliente con pestañas `A / B / Comparar`: mismo modelo → diff por neurona/experto; modelo o
+  arquitectura distintos → métricas normalizadas (parámetros activos, cobertura y entropía del ruteo).
+  Pendiente para la fase GPU: OLMoE/Mixtral reales y un denso de 8B.
 - **Tests, lint y CI:** **implementado** — `pyproject.toml` concentra la configuración de Ruff y pytest;
   `ruff check`/`ruff format --check` pasan, la suite unitaria excluye los tests `slow` y `ui`, y
   `tests/test_integration_slow.py` valida un forward real de GPT-2 con KV cache. El workflow de GitHub
@@ -269,7 +284,9 @@ Hugging Face); `TransformerBridge.check_model_support(hf_id)` lo consulta sin ca
   El panel muestra las 12 neuronas con mayor `|Δ|`, el signo de `B − A` y los tokens generados en cada
   pasada. **Ver diff en heatmap** reemplaza el mapa, ranking, tooltip, detalle y sparkline por el
   diferencial, con escala propia de `máx |Δ|`; **Ver heatmap actual** lo restaura. Cambiar de capa
-  recalcula todo. Exige el mismo modelo.
+  recalcula todo. En el comparador, las pestañas **A** y **B** resumen cada pasada; **Comparar** exige
+  el mismo modelo para el diff por unidad y, si cambia el modelo o la arquitectura, usa métricas
+  normalizadas.
 - **Ablación interactiva:** **implementado** — tras una pasada normal, el botón **Ablar y regenerar**
   repite el mismo modelo, prompt y parámetros con una neurona MLP forzada a `0`. El cliente envía
   `ablation: {layer, neuron}`; el servidor valida el rango y añade un hook temporal a

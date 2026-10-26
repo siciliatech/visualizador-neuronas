@@ -2,7 +2,9 @@ import asyncio
 import gc
 import json
 import logging
+import math
 import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -66,6 +68,12 @@ MODEL_REGISTRY = {
         "hf_id": "EleutherAI/pythia-410m",
         "label": "Pythia-410m base (EleutherAI)",
         "chat": False,
+    },
+    "mixtral-tiny": {
+        "hf_id": "yujiepan/mixtral-8xtiny-random",
+        "label": "Mixtral 8xTiny (MoE didáctico, 0,5M)",
+        "chat": False,
+        "architecture": "moe",
     },
 }
 
@@ -166,6 +174,11 @@ _current = {
     "labels": [],
     "neurons_per_layer": 0,
     "module_path": "",
+    "architecture": "dense",
+    "unit": "neuron",
+    "n_experts": None,
+    "router_top_k": None,
+    "layers_meta": [],
 }
 
 # Hook estándar de TransformerLens para la activación post-MLP (dimensión d_mlp).
@@ -173,11 +186,172 @@ _current = {
 # la neurona completa, no solo la compuerta.
 MLP_NEURON_HOOK = "blocks.{i}.mlp.hook_post"
 
+# En capas MoE, `hook_post` devuelve d_model (la salida del bloque), no d_mlp.
+# La unidad visualizable es el experto: el peso que el router le asigna al
+# último token. Los hooks de ruteo los expone TransformerLens por capa.
+EXPERT_WEIGHTS_HOOK = "blocks.{i}.mlp.hook_expert_weights"
+EXPERT_INDICES_HOOK = "blocks.{i}.mlp.hook_expert_indices"
+
 # Atención post-softmax: [batch, n_heads, q, k]. Solo usamos la última query.
 ATTN_HOOK = "blocks.{i}.attn.hook_pattern"
 
+LAYER_IN_NAME = re.compile(r"layers\.(\d+)\.")
+
 # No depender del CWD: el servidor puede arrancarse desde otro directorio.
 INDEX_PATH = Path(__file__).resolve().parent / "index.html"
+
+
+def config_int(cfg, *names: str) -> int | None:
+    """Primer entero positivo de la config; None si no está declarado."""
+    for name in names:
+        value = getattr(cfg, name, None)
+        if isinstance(value, int) and value > 0:
+            return value
+    return None
+
+
+def detect_expert_count(bridge, layer: int) -> int | None:
+    """Número de expertos de una capa MoE.
+
+    La config no siempre declara `num_experts` (el Mixtral diminuto, por
+    ejemplo, no lo expone). El peso del router (`gate.weight`) siempre tiene
+    forma [n_experts, d_model], así que sirve de respaldo.
+    """
+    configured = config_int(
+        bridge.cfg,
+        "num_experts",
+        "n_experts",
+        "num_local_experts",
+        "moe_num_experts",
+    )
+    if configured:
+        return configured
+
+    marker = f"layers.{layer}."
+    for name, parameter in bridge.named_parameters():
+        if marker not in name or ".mlp." not in name:
+            continue
+        low = name.lower()
+        if not low.endswith("weight") or parameter.ndim != 2:
+            continue
+        if "gate" in low or "router" in low:
+            return int(parameter.shape[0])
+    return None
+
+
+def detect_layers(bridge) -> list[dict]:
+    """Describe qué se visualiza en cada capa: neuronas densas o expertos."""
+    cfg = bridge.cfg
+    d_mlp = getattr(cfg, "d_mlp", None) or getattr(cfg, "d_ff", None) or 0
+    configured_top_k = config_int(
+        cfg,
+        "num_experts_per_tok",
+        "n_experts_per_tok",
+        "moe_top_k",
+        "top_k",
+    )
+    hooks = set(getattr(bridge, "hook_dict", {}) or {})
+    layers = []
+    for layer in range(int(cfg.n_layers)):
+        is_moe = (
+            EXPERT_WEIGHTS_HOOK.format(i=layer) in hooks
+            and EXPERT_INDICES_HOOK.format(i=layer) in hooks
+        )
+        n_experts = detect_expert_count(bridge, layer) if is_moe else None
+        units = (n_experts or d_mlp) if is_moe else d_mlp
+        layers.append(
+            {
+                "layer": layer,
+                "architecture": "moe" if is_moe else "dense",
+                "unit": "expert" if is_moe else "neuron",
+                "units": units,
+                "d_mlp": d_mlp or None,
+                "n_experts": n_experts,
+                "top_k": configured_top_k if is_moe else None,
+            }
+        )
+    return layers
+
+
+def architecture_summary(layers: list[dict]) -> dict:
+    """Resumen del modelo a partir de sus capas, para `meta` y la UI."""
+    moe_layers = [layer for layer in layers if layer["architecture"] == "moe"]
+    if not moe_layers:
+        return {
+            "architecture": "dense",
+            "unit": "neuron",
+            "n_experts": None,
+            "router_top_k": None,
+            "neurons_per_layer": max((layer["units"] for layer in layers), default=0),
+        }
+    architecture = "moe" if len(moe_layers) == len(layers) else "hybrid"
+    n_experts = max((layer["n_experts"] or layer["units"] for layer in moe_layers), default=0)
+    top_k = max((layer["top_k"] for layer in moe_layers if layer["top_k"]), default=None)
+    return {
+        "architecture": architecture,
+        "unit": "expert" if architecture == "moe" else "mixed",
+        "n_experts": n_experts,
+        "router_top_k": top_k,
+        "neurons_per_layer": max((layer["units"] for layer in layers), default=0),
+    }
+
+
+def layer_meta(model: dict, layer: int) -> dict:
+    """Metadatos de una capa; los modelos de tests pueden no tenerlos."""
+    for info in model.get("layers_meta") or []:
+        if info.get("layer") == layer:
+            return info
+    return {}
+
+
+def expert_param_counts(bridge, n_layers: int) -> dict[int, int]:
+    """Parámetros de expertos por capa, detectados por nombre.
+
+    Funciona con expertos como ModuleList (`.experts.0.w1.weight`) y con
+    parámetros batched (`.experts.gate_up_proj`). Excluye expertos compartidos
+    porque están siempre activos.
+    """
+    counts = {layer: 0 for layer in range(n_layers)}
+    for name, parameter in bridge.named_parameters():
+        if ".experts." not in name or "shared_expert" in name:
+            continue
+        match = LAYER_IN_NAME.search(name)
+        if match:
+            layer = int(match.group(1))
+            if layer in counts:
+                counts[layer] += parameter.numel()
+    return counts
+
+
+def active_params_summary(bridge, layers: list[dict], routing: dict) -> dict | None:
+    """Parámetros totales vs activos por token (estimación por ruteo)."""
+    parameters = getattr(bridge, "parameters", None)
+    total = sum(parameter.numel() for parameter in parameters()) if callable(parameters) else None
+    if total is None:
+        return None
+    if not routing:
+        return {
+            "total_params": total,
+            "active_params": total,
+            "active_fraction": 1.0 if total else None,
+            "expert_params_total": 0,
+        }
+
+    expert_params = expert_param_counts(bridge, len(layers))
+    inactive = 0
+    for key, info in routing.items():
+        layer = int(key.rsplit("_", 1)[-1])
+        top_k = info.get("top_k") or 0
+        n_experts = info.get("n_experts") or 0
+        if n_experts > 1 and top_k:
+            inactive += int(expert_params.get(layer, 0) * (1 - top_k / n_experts))
+    active = max(0, total - inactive)
+    return {
+        "total_params": total,
+        "active_params": active,
+        "active_fraction": round(active / total, 4) if total else None,
+        "expert_params_total": sum(expert_params.values()),
+    }
 
 
 def load_model(key: str):
@@ -207,7 +381,10 @@ def load_model(key: str):
     bridge.eval()
 
     n_layers = bridge.cfg.n_layers
-    neurons = getattr(bridge.cfg, "d_mlp", None) or getattr(bridge.cfg, "d_ff", None) or 0
+    layers_meta = detect_layers(bridge)
+    summary = architecture_summary(layers_meta)
+    neurons = summary["neurons_per_layer"]
+    module_path = EXPERT_WEIGHTS_HOOK if summary["unit"] in {"expert", "mixed"} else MLP_NEURON_HOOK
 
     _current.update(
         key=key,
@@ -215,14 +392,21 @@ def load_model(key: str):
         tokenizer=tokenizer,
         labels=[f"layer_{i}" for i in range(n_layers)],
         neurons_per_layer=neurons,
-        module_path=MLP_NEURON_HOOK,
+        module_path=module_path,
+        layers_meta=layers_meta,
+        architecture=summary["architecture"],
+        unit=summary["unit"],
+        n_experts=summary["n_experts"],
+        router_top_k=summary["router_top_k"],
     )
     logger.info(
-        "modelo listo %s: %d capas x %d neuronas (%s) en %.2fs",
+        "modelo listo %s: %d capas x %d %s (%s, arquitectura=%s) en %.2fs",
         key,
         n_layers,
         neurons,
-        MLP_NEURON_HOOK,
+        "expertos" if summary["unit"] in {"expert", "mixed"} else "neuronas",
+        module_path,
+        summary["architecture"],
         time.perf_counter() - started,
     )
     return _current
@@ -405,6 +589,89 @@ def make_ablation_hook(neuron: int):
     return ablate
 
 
+def make_expert_ablation_hook(expert: int):
+    """Apaga un experto poniendo a cero su peso en el router.
+
+    `hook_expert_weights` tiene forma [tokens, n_experts]. TransformerLens
+    re-deriva la selección top-k después de una edición, así que el router
+    elige al siguiente mejor experto: la ablación quita al experto de la
+    decisión, no solo escala su salida.
+    """
+
+    def ablate(tensor: torch.Tensor, hook) -> torch.Tensor:
+        output = tensor.clone()
+        output[..., expert] = 0.0
+        return output
+
+    return ablate
+
+
+def ablation_hook(model: dict, layer: int):
+    """Nombre y función del hook de ablación según la arquitectura de la capa."""
+    info = layer_meta(model, layer)
+    if info.get("architecture") == "moe":
+        return EXPERT_WEIGHTS_HOOK.format(i=layer), make_expert_ablation_hook
+    return MLP_NEURON_HOOK.format(i=layer), make_ablation_hook
+
+
+def layer_routing(cache: dict, layer: int, n_experts_hint: int | None = None) -> dict | None:
+    """Ruteo del último token para una capa MoE.
+
+    Devuelve el vector completo de pesos del router (lo que dibuja el heatmap)
+    y los expertos elegidos con su peso. Algunas arquitecturas entregan los
+    pesos ya recortados a top-k; en ese caso se reconstruye el vector disperso.
+    """
+    indices = cache.get(EXPERT_INDICES_HOOK.format(i=layer))
+    weights = cache.get(EXPERT_WEIGHTS_HOOK.format(i=layer))
+    if indices is None or weights is None:
+        return None
+
+    indices_flat = indices.detach().cpu().reshape(-1, indices.shape[-1])
+    selected_indices = [int(value) for value in indices_flat[-1].tolist()]
+    top_k = len(selected_indices)
+
+    weight_flat = weights.detach().float().cpu()
+    weight_flat = weight_flat.reshape(-1, weight_flat.shape[-1])
+    last_weights = weight_flat[-1]
+    width = int(last_weights.numel())
+
+    if n_experts_hint and width <= top_k and n_experts_hint > width:
+        n_experts = n_experts_hint
+    else:
+        n_experts = width
+
+    full = [0.0] * n_experts
+    if width == n_experts:
+        full = [round(float(value), 5) for value in last_weights.tolist()]
+    else:
+        for index, value in zip(selected_indices, last_weights.tolist()):
+            if 0 <= index < n_experts:
+                full[index] = round(float(value), 5)
+
+    selected_weights = [
+        full[index] if 0 <= index < n_experts else 0.0 for index in selected_indices
+    ]
+    total = sum(selected_weights)
+    if top_k > 1 and total > 0:
+        entropy = 0.0
+        for value in selected_weights:
+            share = value / total
+            if share > 0:
+                entropy -= share * math.log2(share)
+        entropy /= math.log2(top_k)
+    else:
+        entropy = 0.0
+
+    return {
+        "n_experts": n_experts,
+        "top_k": top_k,
+        "experts": selected_indices,
+        "weights": [round(value, 5) for value in selected_weights],
+        "entropy": round(entropy, 4),
+        "router_activations": full,
+    }
+
+
 def forward_once(
     ids: torch.Tensor,
     model: dict,
@@ -422,28 +689,34 @@ def forward_once(
     # atención y el texto deben seguir el contexto completo.
     context_ids = ids[0].tolist() if context_ids is None else context_ids
     decode_state = update_decode_state(decode_state, tokenizer, context_ids)
+    is_moe_model = model.get("architecture") in {"moe", "hybrid"}
     cache_kwargs = {
         "names_filter": lambda name: (
-            name.endswith(".mlp.hook_post") or name.endswith(".attn.hook_pattern")
+            name.endswith(".mlp.hook_post")
+            or name.endswith(".attn.hook_pattern")
+            or name.endswith(".mlp.hook_expert_weights")
+            or name.endswith(".mlp.hook_expert_indices")
         ),
         "return_cache_object": False,
         # Solo nos interesa la última posición: evita guardar el caché de todas
-        # las queries y baja el pico de memoria en prompts largos.
-        "pos_slice": -1,
+        # las queries y baja el pico de memoria en prompts largos. En MoE no se
+        # puede recortar así: el hook de ruteo tiene forma [tokens, expertos] y
+        # el recorte confundiría la dimensión de expertos con la de secuencia.
+        "pos_slice": None if is_moe_model else -1,
     }
     forward_started = time.perf_counter()
     ablation_hook_point = None
     ablation_level = None
     if ablation is not None:
         layer_idx, neuron_idx = ablation
-        hook_name = MLP_NEURON_HOOK.format(i=layer_idx)
+        hook_name, hook_factory = ablation_hook(model, layer_idx)
         ablation_hook_point = bridge.get_hook_point(hook_name)
         if ablation_hook_point is None:
             raise RuntimeError(f"No se encontró el hook de ablación {hook_name!r}.")
         # Nivel propio para retirar solo este hook; run_with_cache usa un nivel
         # interno distinto para sus hooks de caché.
         ablation_level = bridge.context_level
-        ablation_hook_point.add_hook(make_ablation_hook(neuron_idx), level=ablation_level)
+        ablation_hook_point.add_hook(hook_factory(neuron_idx), level=ablation_level)
     try:
         with torch.no_grad():
             if use_cache:
@@ -483,7 +756,21 @@ def forward_once(
     # Solo guardamos el último token y una copia pequeña (lista de floats), para
     # que el caché completo de TransformerLens se libere al salir de la función.
     activations = {}
+    routing = {}
     for layer_idx in range(n_layers):
+        info = layer_meta(model, layer_idx)
+        has_expert_hooks = cache.get(EXPERT_WEIGHTS_HOOK.format(i=layer_idx)) is not None
+        if info.get("architecture") == "moe" or (not info and has_expert_hooks):
+            route = layer_routing(cache, layer_idx, info.get("n_experts"))
+            if route is None:
+                continue
+            # En MoE la unidad no es la neurona d_mlp del bloque, sino cada
+            # experto: el heatmap muestra los pesos del router.
+            activations[f"layer_{layer_idx}"] = [
+                round(value, 3) for value in route.pop("router_activations")
+            ]
+            routing[f"layer_{layer_idx}"] = route
+            continue
         tensor = cache.get(MLP_NEURON_HOOK.format(i=layer_idx))
         if tensor is None:
             continue
@@ -513,6 +800,7 @@ def forward_once(
     attention = {
         "tokens": list(decode_state["labels"]),
         "layers": attn_layers,
+        "routing": routing,
     }
 
     return logits, activations, attention, decode_state, new_past
@@ -571,7 +859,13 @@ async def models():
     return {
         "default": DEFAULT_MODEL,
         "models": [
-            {"key": k, "label": v["label"], "chat": v["chat"]} for k, v in MODEL_REGISTRY.items()
+            {
+                "key": k,
+                "label": v["label"],
+                "chat": v["chat"],
+                "architecture": v.get("architecture", "dense"),
+            }
+            for k, v in MODEL_REGISTRY.items()
         ],
     }
 
@@ -673,13 +967,17 @@ async def process_generate(
                 recoverable=True,
             )
             return
-        if req.ablation.neuron >= state["neurons_per_layer"]:
+        info = layer_meta(state, req.ablation.layer)
+        is_expert = info.get("unit") == "expert" or (not info and state.get("unit") == "expert")
+        limit = info.get("units") or state["neurons_per_layer"]
+        if req.ablation.neuron >= limit:
+            unit = "Experto" if is_expert else "Neurona"
+            plural = "expertos" if is_expert else "neuronas"
             await send_error(
                 websocket,
                 "invalid_request",
-                f"Neurona de ablación {req.ablation.neuron} fuera de rango; la capa tiene "
-                f"{state['neurons_per_layer']} neuronas "
-                f"(0..{state['neurons_per_layer'] - 1}).",
+                f"{unit} de ablación {req.ablation.neuron} fuera de rango; la capa tiene "
+                f"{limit} {plural} (0..{limit - 1}).",
                 recoverable=True,
             )
             return
@@ -708,7 +1006,13 @@ async def process_generate(
         selected_layer,
         use_kv,
         generation_seed,
-        f"capa {ablation[0]} neurona {ablation[1]}" if ablation else "no",
+        (
+            f"capa {ablation[0]} "
+            f"{'experto' if layer_meta(state, ablation[0]).get('unit') == 'expert' else 'neurona'} "
+            f"{ablation[1]}"
+            if ablation
+            else "no"
+        ),
     )
 
     # Forward de calentamiento: confirma que los hooks disparan y nos da
@@ -729,6 +1033,26 @@ async def process_generate(
     neurons = len(next(iter(activations.values()))) if activations else state["neurons_per_layer"]
     attn_heads = len(next(iter(attention["layers"].values()))) if attention["layers"] else 0
 
+    # El primer forward confirma el ruteo real (algunos modelos no declaran
+    # top-k en la config). Completamos los metadatos antes de mandar `meta`.
+    routing = attention.get("routing") or {}
+    layers_meta = state.get("layers_meta") or []
+    n_experts = state.get("n_experts")
+    router_top_k = state.get("router_top_k")
+    if routing:
+        n_experts = max((info["n_experts"] for info in routing.values()), default=n_experts)
+        router_top_k = max((info["top_k"] for info in routing.values()), default=router_top_k)
+        for info in layers_meta:
+            route = routing.get(f"layer_{info['layer']}")
+            if route:
+                info["n_experts"] = route["n_experts"]
+                info["top_k"] = route["top_k"]
+                if info.get("architecture") == "moe":
+                    info["units"] = route["n_experts"]
+        if state.get("architecture") not in {None, "dense"}:
+            state.update(architecture_summary(layers_meta))
+    active_params = active_params_summary(state["bridge"], layers_meta, routing)
+
     await websocket.send_json(
         {
             "type": "meta",
@@ -745,6 +1069,13 @@ async def process_generate(
             "layer": selected_layer,
             "neurons_per_layer": neurons,
             "top_k": TOP_K,
+            "architecture": state.get("architecture", "dense"),
+            "unit": state.get("unit", "neuron"),
+            "n_experts": n_experts,
+            "router_top_k": router_top_k,
+            "layers_meta": layers_meta,
+            "routing_available": bool(routing),
+            "active_params": active_params,
             "capture_all": req.capture_all,
             "seed": generation_seed,
             "ablation": req.ablation.model_dump() if req.ablation else None,
@@ -772,10 +1103,15 @@ async def process_generate(
         # cuando un carácter multibyte se reparte entre dos tokens.
         delta, generated_text = decode_delta(tokenizer, generated_ids, generated_text)
         generated += 1
+        routing = attention.get("routing") or {}
 
         top_by_layer = {}
         for key, values in activations.items():
             ranked = sorted(range(len(values)), key=lambda i: values[i], reverse=True)
+            if key in routing:
+                # Los expertos no elegidos no se computan: mostrarlos como
+                # ceros daría la idea falsa de que están apagados.
+                ranked = [i for i in ranked if abs(values[i]) > 0]
             top_by_layer[key] = [[i, values[i]] for i in ranked[:TOP_K]]
 
         # Guardamos el estado completo para responder a `select_layer` sin
@@ -789,6 +1125,9 @@ async def process_generate(
         stats = activation_stats(activations)
         stats["max_abs"]["token"] = delta
         stats["max_signed"]["token"] = delta
+        # El ruteo viaja en su propio campo: así `attention` conserva el
+        # contrato anterior y no se duplica información en cada paso.
+        attention_payload = {key: value for key, value in attention.items() if key != "routing"}
 
         payload = {
             "type": "step",
@@ -800,7 +1139,8 @@ async def process_generate(
             "activations": activations if req.capture_all else visible,
             "stats": stats,
             "top": top_by_layer,
-            "attention": attention,
+            "attention": attention_payload,
+            "routing": routing,
         }
         await websocket.send_json(payload)
         logger.info(

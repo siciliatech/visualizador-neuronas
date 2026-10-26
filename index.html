@@ -60,6 +60,72 @@
     white-space: nowrap;
   }
 
+  /* ---------- Punto de partida ---------- */
+  .intent { padding: 14px 16px; margin-bottom: 12px; }
+  .intent-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .intent-head h2 {
+    margin: 0; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .intent-head p { margin: 0; color: var(--dim); font-size: .78rem; }
+  .intent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .intent-option {
+    position: relative; display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 14px 12px; border: 1px solid var(--border); border-radius: 12px;
+    background: rgba(148, 163, 184, .04);
+    border-top: 3px solid rgba(34, 211, 238, .45);
+  }
+  .intent-option[data-intent="compare"] { border-top-color: rgba(251, 191, 36, .55); }
+  .intent-option.active {
+    border-color: rgba(34, 211, 238, .5);
+    background: rgba(34, 211, 238, .06);
+  }
+  .intent-option[data-intent="compare"].active {
+    border-color: rgba(251, 191, 36, .5);
+    background: rgba(251, 191, 36, .06);
+  }
+  .intent-details summary {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; cursor: pointer; list-style: none;
+  }
+  .intent-details summary::-webkit-details-marker { display: none; }
+  .intent-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .intent-summary { display: grid; gap: 3px; min-width: 0; }
+  .intent-kicker {
+    font: 700 .6rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+  }
+  .intent-title { font-size: .95rem; font-weight: 600; color: var(--text); }
+  .intent-lead { color: var(--muted); font-size: .79rem; }
+  .intent-more {
+    flex: 0 0 auto; white-space: nowrap; margin-top: 1px;
+    color: var(--accent); font: 600 .71rem ui-sans-serif, system-ui, sans-serif;
+    border: 1px solid rgba(34, 211, 238, .4); border-radius: 999px; padding: 2px 9px;
+  }
+  .intent-option[data-intent="compare"] .intent-more {
+    color: var(--warm); border-color: rgba(251, 191, 36, .38);
+  }
+  .intent-more::after { content: 'Ver más'; }
+  .intent-details[open] .intent-more::after { content: 'Ver menos'; }
+  .intent-details summary:hover .intent-more { border-color: currentColor; }
+  .intent-body { margin-top: 9px; display: grid; gap: 7px; }
+  .intent-body ol {
+    margin: 0; padding-left: 1.15rem; display: grid; gap: 2px;
+    color: var(--muted); font-size: .76rem;
+  }
+  .intent-body .hint { margin: 0; }
+  .intent-option button { align-self: flex-start; margin-top: 2px; }
+  .intent-status {
+    margin: 10px 0 0; padding: 6px 10px; border-radius: 8px;
+    border-left: 3px solid var(--accent); background: rgba(34, 211, 238, .07);
+    color: var(--muted); font-size: .77rem;
+  }
+  .intent-status[hidden] { display: none; }
+  .intent-status b { color: var(--text); }
+
   /* ---------- Cards ---------- */
   .card {
     background: var(--panel);
@@ -289,6 +355,10 @@
   .ghost-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
   .ghost-btn:disabled { opacity: .45; cursor: default; }
   .report-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .report-actions .compare-hint {
+    align-self: center; max-width: 320px; color: var(--warm);
+    font-size: .68rem; line-height: 1.35;
+  }
   .report { font-size: .9rem; color: var(--muted); line-height: 1.6; }
   .report p { margin: 0 0 10px; }
   .report b { color: var(--text); }
@@ -324,6 +394,44 @@
   /* ---------- Comparación ---------- */
   .compare-panel { margin-top: 16px; padding: 16px; }
   .compare-panel[hidden], .compare-controls[hidden] { display: none; }
+  .compare-tabs {
+    display: flex; gap: 6px; margin: 4px 0 10px;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  .compare-tab {
+    appearance: none; cursor: pointer;
+    color: var(--muted); background: rgba(148, 163, 184, .07);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 14px; font: 700 .74rem ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .compare-tab:hover:not(:disabled) { color: var(--text); border-color: rgba(34, 211, 238, .45); }
+  .compare-tab[aria-selected="true"] {
+    color: #06202a; border-color: rgba(34, 211, 238, .8);
+    background: linear-gradient(180deg, #67e8f9, #22d3ee);
+  }
+  .compare-tab:disabled { opacity: .4; cursor: not-allowed; }
+  .compare-snapshot-head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .compare-snapshot-text {
+    margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: rgba(11, 20, 36, .6);
+    color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .8rem; white-space: pre-wrap; word-break: break-word;
+  }
+  .compare-bars { margin: 12px 0 4px; }
+  .compare-bar-row {
+    display: grid; grid-template-columns: 170px 1fr 1fr; gap: 8px;
+    align-items: center; margin: 6px 0; font-size: .76rem; color: var(--muted);
+  }
+  .compare-bar-row .bar-label { color: var(--dim); }
+  .compare-bar {
+    height: 10px; border-radius: 99px; overflow: hidden;
+    background: rgba(148, 163, 184, .1); border: 1px solid var(--border);
+  }
+  .compare-bar i { display: block; height: 100%; background: var(--accent); }
+  .compare-bar.b i { background: var(--warm); }
   .compare-controls {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px;
   }
@@ -426,6 +534,78 @@
     box-shadow: 0 10px 30px -10px #000;
   }
 
+  /* ---------- Ruteo MoE ---------- */
+  .moe-panel { margin-top: 16px; padding: 16px; }
+  .moe-panel[hidden] { display: none; }
+  .moe-grid-wrap {
+    margin-top: 10px; padding: 10px; border-radius: 10px;
+    background: rgba(11, 20, 36, .72); border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .moe-grid {
+    display: grid; gap: 3px; align-items: center; justify-content: start;
+    min-width: max-content;
+  }
+  .moe-col-label, .moe-corner {
+    font: 600 .58rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--dim); text-align: center;
+  }
+  .moe-layer-label {
+    font: 600 .63rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--muted); text-align: right; padding-right: 8px; white-space: nowrap;
+  }
+  .moe-cell {
+    width: var(--moe-cell, 24px); height: var(--moe-cell, 24px);
+    display: grid; place-items: center; border-radius: 5px;
+    border: 1px solid rgba(148, 163, 184, .16);
+    background: rgba(148, 163, 184, .05);
+    color: var(--dim); font: 600 .6rem ui-monospace, monospace;
+    cursor: pointer;
+    transition: background .2s, border-color .2s, box-shadow .2s;
+  }
+  .moe-cell.on {
+    color: #06202a;
+    border-color: rgba(34, 211, 238, .75);
+    background: rgba(34, 211, 238, var(--w, .6));
+    box-shadow: 0 0 12px rgba(34, 211, 238, calc(var(--w, .6) * .55));
+  }
+  .moe-legend {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 9px; font-size: .68rem; color: var(--dim);
+  }
+  .moe-legend .moe-scale {
+    width: 120px; height: 9px; border-radius: 99px;
+    background: linear-gradient(90deg, rgba(34, 211, 238, .12), rgba(34, 211, 238, .95));
+    border: 1px solid var(--border);
+  }
+  .moe-metrics {
+    margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: rgba(148, 163, 184, .05);
+    font-size: .78rem; color: var(--muted);
+  }
+  .moe-metrics b { color: var(--text); font-family: ui-monospace, monospace; }
+  .moe-load-block { margin-top: 16px; }
+  .moe-load-block .panel-head h3 {
+    margin: 0; font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .moe-load-row {
+    display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center;
+    margin: 6px 0;
+  }
+  .moe-load-bar {
+    display: flex; height: 16px; border-radius: 5px; overflow: hidden;
+    background: rgba(148, 163, 184, .08); border: 1px solid var(--border);
+  }
+  .moe-load-bar i { display: block; height: 100%; }
+  .moe-load-chips { grid-column: 2; display: flex; gap: 6px; flex-wrap: wrap; margin-top: -2px; }
+  .moe-load-chip {
+    font: 600 .6rem ui-monospace, monospace; color: var(--muted);
+    background: rgba(148, 163, 184, .08); border: 1px solid var(--border);
+    border-radius: 999px; padding: 1px 7px;
+  }
+  .moe-load-chip b { color: var(--text); }
+
   /* ---------- Responsive ---------- */
   @media (max-width: 1180px) {
     .layout { grid-template-columns: 1fr 1.4fr; }
@@ -436,6 +616,7 @@
     .layout { grid-template-columns: 1fr; }
     .side { grid-template-columns: 1fr; }
     .detail { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+    .intent-grid { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
@@ -449,16 +630,72 @@
     <div class="logo">◉</div>
     <div>
       <h1>El interior de una neurona artificial</h1>
-      <p class="tagline">Mira cómo se encienden las neuronas de la MLP, capa por capa, mientras el modelo escribe token a token.</p>
+      <p class="tagline">Mira cómo se encienden las neuronas de la MLP —o los expertos de un modelo MoE—, capa por capa, mientras el modelo escribe token a token.</p>
     </div>
   </div>
   <div class="chips">
     <span class="chip" id="chip-model">modelo —</span>
+    <span class="chip" id="chip-arch">denso</span>
     <span class="chip" id="chip-layers">— capas</span>
     <span class="chip" id="chip-neurons">— neuronas/capa</span>
     <span class="chip" id="chip-token">token 0</span>
   </div>
 </header>
+
+<section class="intent card" aria-labelledby="intent-title">
+  <div class="intent-head">
+    <h2 id="intent-title">¿Qué querés hacer?</h2>
+    <p>Dos recorridos posibles; podés cambiar de idea cuando quieras.</p>
+  </div>
+  <div class="intent-grid">
+    <article class="intent-option active" data-intent="explore">
+      <details class="intent-details">
+        <summary>
+          <span class="intent-summary">
+            <span class="intent-kicker">Recorrido 1</span>
+            <span class="intent-title">Ver un modelo trabajando</span>
+            <span class="intent-lead">Generá texto y mirá qué neuronas se activan en cada capa.</span>
+          </span>
+          <span class="intent-more" aria-hidden="true"></span>
+        </summary>
+        <div class="intent-body">
+          <ol>
+            <li>Elegí el modelo y escribí un prompt.</li>
+            <li>Explorá el heatmap, la atención y el informe.</li>
+            <li>Probá apagar una neurona con <b>Ablar y regenerar</b>.</li>
+          </ol>
+        </div>
+      </details>
+      <button type="button" class="ghost-btn" id="intent-explore" aria-pressed="true">
+        Empezar a explorar
+      </button>
+    </article>
+    <article class="intent-option" data-intent="compare">
+      <details class="intent-details">
+        <summary>
+          <span class="intent-summary">
+            <span class="intent-kicker">Recorrido 2</span>
+            <span class="intent-title">Comparar dos pasadas</span>
+            <span class="intent-lead">Qué cambió entre dos generaciones y cuánto cómputo usa cada modelo.</span>
+          </span>
+          <span class="intent-more" aria-hidden="true"></span>
+        </summary>
+        <div class="intent-body">
+          <ol>
+            <li>Generá A y pulsá <b>Guardar A</b>.</li>
+            <li>Cambiá el prompt o el modelo y generá B.</li>
+            <li>Pulsá <b>Comparar</b> y elegí la pestaña A, B o Comparar.</li>
+          </ol>
+          <p class="hint">Mismo modelo: diff por neurona o experto. Denso vs MoE: métricas normalizadas de cómputo y ruteo.</p>
+        </div>
+      </details>
+      <button type="button" class="ghost-btn" id="intent-compare" aria-pressed="false">
+        Preparar la comparación
+      </button>
+    </article>
+  </div>
+  <p class="intent-status" id="intent-status" aria-live="polite" hidden></p>
+</section>
 
 <section class="controls card">
   <div class="control">
@@ -501,8 +738,8 @@
     <input id="no_repeat_ngram" type="number" value="0" step="1" min="0" max="10" title="no_repeat_ngram: prohíbe repetir secuencias de N tokens (0 o 1 = desactivado; N≥2 activo)">
   </div>
   <div class="control">
-    <div class="label-row"><label for="capture_all">Exportar</label><button type="button" class="help" data-help="capture_all" aria-label="Ayuda: Exportar" aria-expanded="false">?</button></div>
-    <label class="check" title="Captura todas las capas para poder descargar cualquiera de ellas en CSV o Parquet al terminar">
+    <div class="label-row"><label for="capture_all">Capturar todo</label><button type="button" class="help" data-help="capture_all" aria-label="Ayuda: Capturar todo" aria-expanded="false">?</button></div>
+    <label class="check" title="Captura todas las capas para exportar cualquier capa y para comparar dos pasadas A/B">
       <input id="capture_all" type="checkbox"> todas las capas
     </label>
   </div>
@@ -559,7 +796,7 @@
   <aside class="side">
     <section class="panel card">
       <div class="panel-head">
-        <h2>Neuronas con mayor activación</h2>
+        <h2 id="topk-title">Neuronas con mayor activación</h2>
         <span class="hint" id="topk-layer">capa 0 · valor con signo</span>
       </div>
       <div id="topk"></div>
@@ -567,11 +804,11 @@
 
     <section class="panel card detail">
       <div class="panel-head">
-        <h2>Neurona seleccionada</h2>
+        <h2 id="detail-title">Neurona seleccionada</h2>
       </div>
       <div id="detail-empty" class="muted">Haz clic en una neurona del mapa o en el ranking.</div>
       <div id="detail-body" hidden>
-        <div class="detail-row"><span>Neurona</span><b id="d-neuron">—</b></div>
+        <div class="detail-row"><span id="d-neuron-label">Neurona</span><b id="d-neuron">—</b></div>
         <div class="detail-row"><span id="d-value-label">Valor actual</span><b id="d-value">—</b></div>
         <div class="detail-row"><span>Ranking</span><b id="d-rank">—</b></div>
         <canvas id="spark" width="260" height="76"></canvas>
@@ -583,6 +820,36 @@
     </section>
   </aside>
 </main>
+
+<section class="panel card moe-panel" id="moe-panel" hidden>
+  <div class="panel-head">
+    <h2>Ruteo MoE: qué expertos se encienden</h2>
+    <span class="hint" id="moe-hint">cada fila = una capa · cada columna = un experto</span>
+  </div>
+  <p class="attn-intro">
+    En un modelo <b>MoE</b> (Mixture of Experts), cada capa tiene varios <b>expertos</b> y un
+    <b>router</b> que elige unos pocos por token. Los demás no se computan: no es que estén
+    «apagados», es que directamente no participan. Aquí ves qué eligió el router en el último token:
+    <b id="moe-k">—</b> de <b id="moe-experts">—</b> expertos por capa.
+  </p>
+  <div id="moe-metrics" class="moe-metrics" hidden></div>
+  <div class="moe-grid-wrap">
+    <div class="moe-grid" id="moe-grid"></div>
+  </div>
+  <div class="moe-legend">
+    <span>no elegido</span>
+    <span class="moe-scale"></span>
+    <span>elegido con más peso</span>
+    <span>· el brillo es el peso del router en el último token</span>
+  </div>
+  <div class="moe-load-block">
+    <div class="panel-head">
+      <h3>¿Siempre elige los mismos?</h3>
+      <span class="hint" id="moe-load-hint">carga acumulada durante la generación</span>
+    </div>
+    <div id="moe-load"></div>
+  </div>
+</section>
 
 <section class="panel card attn-panel">
   <div class="panel-head">
@@ -651,7 +918,7 @@
     </div>
     <div class="ablation-col">
       <div class="ablation-head">
-        <h3>Neurona apagada</h3>
+        <h3 id="ablation-after-title">Neurona apagada</h3>
         <span id="ablation-after-meta" class="ablation-tag"></span>
       </div>
       <div id="ablation-after" class="ablation-text"></div>
@@ -664,6 +931,7 @@
   <div class="panel-head">
     <h2>Informe: ¿qué pasó en esta generación?</h2>
     <div class="report-actions">
+      <span id="compare-hint" class="hint compare-hint" hidden></span>
       <button id="copy-report" class="ghost-btn" title="Copiar el informe al portapapeles">Copiar</button>
       <button id="export-csv" class="ghost-btn" disabled title="Descargar en CSV las neuronas de la capa visible durante toda la generación (requiere activar «todas las capas» antes de generar)">CSV capa</button>
       <button id="export-all-csv" class="ghost-btn" disabled title="Descargar todas las capas en un único CSV (requiere activar «todas las capas» antes de generar)">CSV todas</button>
@@ -679,8 +947,16 @@
 
 <section class="panel card compare-panel" id="compare-panel" hidden>
   <div class="panel-head">
-    <h2>Comparación A vs B</h2>
-    <button id="compare-exit" class="ghost-btn" title="Cerrar la comparación">Cerrar</button>
+    <h2>Comparador A vs B</h2>
+    <button id="compare-exit" class="ghost-btn" title="Cerrar el comparador">Cerrar</button>
+  </div>
+  <div class="compare-tabs" role="tablist" aria-label="Pasadas comparadas">
+    <button type="button" class="compare-tab" id="compare-tab-a" data-compare-tab="a"
+      role="tab" aria-selected="false" aria-controls="compare-body">A</button>
+    <button type="button" class="compare-tab" id="compare-tab-b" data-compare-tab="b"
+      role="tab" aria-selected="false" aria-controls="compare-body" disabled>B</button>
+    <button type="button" class="compare-tab" id="compare-tab-compare" data-compare-tab="compare"
+      role="tab" aria-selected="true" aria-controls="compare-body" disabled>Comparar</button>
   </div>
   <div id="compare-controls" class="compare-controls" hidden>
     <label for="compare-step">Vista</label>
@@ -696,15 +972,15 @@
 <details class="explainer card">
   <summary>¿Qué estoy viendo?</summary>
   <div class="explainer-body">
-    <p>Estás viendo las <b>neuronas de la MLP</b> de un transformer: los “perceptrones” internos que transforman la información en cada capa.</p>
+    <p id="explainer-intro">Estás viendo las <b>neuronas de la MLP</b> de un transformer: los “perceptrones” internos que transforman la información en cada capa.</p>
     <ul>
-      <li><b>Cada celda</b> del mapa es una neurona. El color indica cuánto se activa: oscuro = poco, verde/amarillo/rojo = mucho; azul = activación negativa.</li>
-      <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus <b id="explainer-topk">16</b> neuronas con mayor activación (valor con signo, no magnitud).</li>
+      <li id="explainer-cell"><b>Cada celda</b> del mapa es una neurona. El color indica cuánto se activa: oscuro = poco, verde/amarillo/rojo = mucho; azul = activación negativa.</li>
+      <li><b>Cada fila</b> del panel izquierdo es una capa. Al generar un token, la señal recorre las capas de arriba abajo; cada fila muestra sus <b id="explainer-topk">16</b> <span id="explainer-topk-unit">neuronas</span> con mayor activación (valor con signo, no magnitud).</li>
       <li><b>Cada token nuevo</b> recorre las capas (reutilizando el KV cache cuando está disponible): por eso el patrón cambia y se anima.</li>
-      <li>Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
-      <li>Con una neurona seleccionada, <b>Ablar y regenerar</b> la apaga temporalmente y compara el texto con la última pasada normal. Una sola neurona puede no cambiar la salida.</li>
+      <li id="explainer-select">Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una <b>neurona</b> para seguir su activación token a token.</li>
+      <li id="explainer-ablate">Con una neurona seleccionada, <b>Ablar y regenerar</b> la apaga temporalmente y compara el texto con la última pasada normal. Una sola neurona puede no cambiar la salida.</li>
       <li>El panel de <b>atención</b> muestra las conexiones reales: a qué tokens anteriores mira cada cabeza al predecir el siguiente. Cada cabeza es un “canal” distinto.</li>
-      <li>En <b>Comparación A vs B</b>, <b>Vista</b> permite comparar la media, una misma posición o tokens coincidentes por contenido; <b>Ver diff en heatmap</b> cambia el mapa, el ranking, el tooltip y el detalle a <b>Δ = B − A</b>; <b>Ver heatmap actual</b> vuelve a la activación normal.</li>
+      <li id="explainer-compare">En el <b>Comparador A vs B</b>, las pestañas <b>A</b> y <b>B</b> resumen cada pasada. Si ambas usan el mismo modelo, <b>Comparar</b> ofrece un diff por neurona/experto con <b>Vista</b> (media, posición o token coincidente) y <b>Ver diff en heatmap</b>. Si cambia el modelo o la arquitectura, Comparar usa <b>métricas normalizadas</b> (cómputo activo y ruteo) porque los índices no son comparables.</li>
     </ul>
     <p class="small">Nota: esto muestra activaciones, no “pensamientos” ni conexiones físicas. Es una ventana a los números con los que el modelo calcula.</p>
   </div>
@@ -720,16 +996,127 @@
   let ROWS = 48;
   const CELL = 12;
   let cellIndex = new Int32Array(0);
+  let layoutUnits = 0;
 
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const ease = (t) => 1 - Math.pow(1 - clamp(t), 3);
 
-  let META = { layers: 12, neurons_per_layer: 3072, top_k: 16 };
+  // Una capa puede ser densa (neuronas MLP) o MoE (expertos). `layers_meta`
+  // llega en `meta`; el respaldo mantiene compatibles los servidores viejos.
+  function layerInfo(layer) {
+    const list = Array.isArray(META.layers_meta) ? META.layers_meta : [];
+    const info = list.find((entry) => entry.layer === layer);
+    if (info && Number.isFinite(info.units) && info.units > 0) {
+      return {
+        ...info,
+        unit: info.architecture === 'moe' ? 'expert' : (info.unit || 'neuron'),
+      };
+    }
+    const isExpert = META.unit === 'expert' || META.unit === 'mixed';
+    return {
+      layer,
+      architecture: isExpert ? 'moe' : (META.architecture || 'dense'),
+      unit: isExpert ? 'expert' : 'neuron',
+      units: META.neurons_per_layer,
+    };
+  }
+
+  function isMoeLayer(layer = selectedLayer) {
+    return layerInfo(layer).unit === 'expert';
+  }
+
+  function modelIsMoe() {
+    return META.architecture === 'moe' || META.architecture === 'hybrid';
+  }
+
+  function unitSingular(layer = selectedLayer) {
+    return isMoeLayer(layer) ? 'experto' : 'neurona';
+  }
+
+  function unitPlural(layer = selectedLayer) {
+    return isMoeLayer(layer) ? 'expertos' : 'neuronas';
+  }
+
+  function architectureLabel() {
+    if (META.architecture === 'moe') return 'MoE';
+    if (META.architecture === 'hybrid') return 'híbrido';
+    return 'denso';
+  }
+
+  function formatParams(value) {
+    if (!Number.isFinite(value)) return '—';
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+    if (value >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
+    return String(value);
+  }
+
+  // El explicador y los textos fijos cambian de «neurona» a «experto» cuando el
+  // modelo cargado es MoE. Se reescribe en cada `meta` para que cambiar de
+  // modelo denso a MoE (y volver) deje los textos correctos.
+  function renderExplainer() {
+    const moe = modelIsMoe();
+    const intro = document.getElementById('explainer-intro');
+    const cell = document.getElementById('explainer-cell');
+    const select = document.getElementById('explainer-select');
+    const ablate = document.getElementById('explainer-ablate');
+    const topkUnit = document.getElementById('explainer-topk-unit');
+    if (!intro || !cell || !select || !ablate || !topkUnit) return;
+    if (moe) {
+      intro.innerHTML =
+        'Este modelo es <b>MoE</b> (Mixture of Experts): cada capa tiene varios ' +
+        '<b>expertos</b> y un <b>router</b> que elige unos pocos por token. ' +
+        'Los demás no se computan.';
+      cell.innerHTML =
+        '<b>Cada celda</b> del mapa es un experto. El color indica el <b>peso que ' +
+        'el router le dio en el último token</b>: apagado = no elegido; más brillante = ' +
+        'más peso. No es una activación interna del experto.';
+      select.innerHTML =
+        'Haz <b>clic en una capa</b> para ver sus expertos, y en un <b>experto</b> ' +
+        'para seguir su peso del router token a token.';
+      ablate.innerHTML =
+        'Con un experto seleccionado, <b>Apagar experto y regenerar</b> lo quita del ' +
+        'ruteo y compara el texto con la última pasada normal. Un solo experto puede ' +
+        'no cambiar la salida.';
+      topkUnit.textContent = 'expertos';
+    } else {
+      intro.innerHTML =
+        'Estás viendo las <b>neuronas de la MLP</b> de un transformer: los ' +
+        '“perceptrones” internos que transforman la información en cada capa.';
+      cell.innerHTML =
+        '<b>Cada celda</b> del mapa es una neurona. El color indica cuánto se activa: ' +
+        'oscuro = poco, verde/amarillo/rojo = mucho; azul = activación negativa.';
+      select.innerHTML =
+        'Haz <b>clic en una capa</b> para ver todas sus neuronas, y en una ' +
+        '<b>neurona</b> para seguir su activación token a token.';
+      ablate.innerHTML =
+        'Con una neurona seleccionada, <b>Ablar y regenerar</b> la apaga temporalmente ' +
+        'y compara el texto con la última pasada normal. Una sola neurona puede no ' +
+        'cambiar la salida.';
+      topkUnit.textContent = 'neuronas';
+    }
+  }
+
+  let META = {
+    layers: 12,
+    neurons_per_layer: 3072,
+    top_k: 16,
+    architecture: 'dense',
+    unit: 'neuron',
+    n_experts: null,
+    router_top_k: null,
+    layers_meta: [],
+    routing_available: false,
+    active_params: null,
+  };
   let selectedLayer = 0;
   let selectedNeuron = null;
   let scaleMax = 1;
   let prev = {}, curr = {}, topkData = {};
+  let routingData = {};
+  let routingLoad = {};
+  let routingLoadSteps = 0;
   // Cada paso completo se guarda como Float32Array por capa para que el CSV
   // pueda elegir cualquier capa sin reenviar datos al servidor.
   let capturedSteps = [];
@@ -737,6 +1124,7 @@
   let snapshotA = null;
   let comparison = null;
   let compareSnapshots = null;
+  let compareTab = 'compare';
   let compareStep = 'mean';
   let compareAlignments = [];
   let compareHeatmap = false;
@@ -758,6 +1146,8 @@
     return {
       prompt: '', tokens: 0, requested: 0, startedAt: 0, firstStepAt: 0, elapsed: 0,
       modelLabel: '', modelKey: '', layers: 0, neurons: 0, stopped: '', captureAll: false,
+      architecture: 'dense', unit: 'neuron', nExperts: null, routerTopK: null,
+      activeParams: null,
       maxAct: { value: -Infinity, abs: -Infinity, layer: 0, neuron: 0, token: '' },
       maxLayerMean: { value: -Infinity, layer: 0 },
       strongestAttn: { weight: -Infinity, layer: 0, head: 0, pos: 0, token: '', predicted: '' },
@@ -775,6 +1165,7 @@
     selectedLayer = clamp(layer, 0, META.layers - 1);
     selectedNeuron = null;
     spark = [];
+    ensureLayoutForLayer();
     if (Array.isArray(values) && values.length) {
       const key = `layer_${selectedLayer}`;
       curr[key] = values;
@@ -783,7 +1174,7 @@
     updateHeatmapHeading();
     updateExportButtons();
     if (compareSnapshots) {
-      showComparison(compareSnapshots.a, compareSnapshots.b);
+      renderComparePanel();
     }
     renderTopk();
     updateDetail();
@@ -913,11 +1304,26 @@
   const repPenaltyInput = document.getElementById('rep_penalty');
   const noRepeatNgramInput = document.getElementById('no_repeat_ngram');
   const captureAllInput = document.getElementById('capture_all');
+  const intentCards = Array.from(document.querySelectorAll('.intent-option'));
+  const intentExploreBtn = document.getElementById('intent-explore');
+  const intentCompareBtn = document.getElementById('intent-compare');
+  const intentStatus = document.getElementById('intent-status');
   const modelBadge = document.getElementById('model-badge');
   const chipModel = document.getElementById('chip-model');
+  const chipArch = document.getElementById('chip-arch');
   const chipLayers = document.getElementById('chip-layers');
   const chipNeurons = document.getElementById('chip-neurons');
   const chipToken = document.getElementById('chip-token');
+  const topkTitle = document.getElementById('topk-title');
+  const detailTitle = document.getElementById('detail-title');
+  const dNeuronLabel = document.getElementById('d-neuron-label');
+  const moePanel = document.getElementById('moe-panel');
+  const moeGrid = document.getElementById('moe-grid');
+  const moeKEl = document.getElementById('moe-k');
+  const moeExpertsEl = document.getElementById('moe-experts');
+  const moeMetrics = document.getElementById('moe-metrics');
+  const moeLoad = document.getElementById('moe-load');
+  const moeLoadHint = document.getElementById('moe-load-hint');
   const detailEmpty = document.getElementById('detail-empty');
   const detailBody = document.getElementById('detail-body');
   const dNeuron = document.getElementById('d-neuron');
@@ -943,12 +1349,14 @@
   const exportParquetBtn = document.getElementById('export-parquet');
   const saveABtn = document.getElementById('save-a');
   const compareBtn = document.getElementById('compare-runs');
+  const compareHint = document.getElementById('compare-hint');
   const comparePanel = document.getElementById('compare-panel');
   const compareBody = document.getElementById('compare-body');
   const compareExitBtn = document.getElementById('compare-exit');
   const compareControls = document.getElementById('compare-controls');
   const compareStepSelect = document.getElementById('compare-step');
   const compareOverlayBtn = document.getElementById('compare-overlay');
+  const compareTabButtons = Array.from(document.querySelectorAll('.compare-tab'));
   const heatmapHint = document.getElementById('heatmap-hint');
   const dValueLabel = document.getElementById('d-value-label');
   const sparkNote = document.getElementById('spark-note');
@@ -1058,7 +1466,8 @@
   }
 
   function resizeHeatmap() {
-    const n = META.neurons_per_layer || 3072;
+    const n = layerInfo(selectedLayer).units || 3072;
+    layoutUnits = n;
     layout = buildLayout(n, heatmapShapeEl.value);
     COLS = layout.cols;
     ROWS = layout.rows;
@@ -1068,14 +1477,18 @@
     needsDraw = true;
   }
 
-  // Neurona bajo el puntero (o -1).
+  function ensureLayoutForLayer() {
+    if (layerInfo(selectedLayer).units !== layoutUnits) resizeHeatmap();
+  }
+
+  // Unidad bajo el puntero (neurona o experto; -1 si no hay).
   function neuronAtEvent(e) {
     const r = heatmap.getBoundingClientRect();
     const cx = Math.floor((e.clientX - r.left) * (canvasW(heatmap) / r.width) / CELL);
     const cy = Math.floor((e.clientY - r.top) * (canvasH(heatmap) / r.height) / CELL);
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return -1;
     const i = cellIndex[cy * COLS + cx];
-    return i < META.neurons_per_layer ? i : -1;
+    return i >= 0 && i < layerInfo(selectedLayer).units ? i : -1;
   }
 
   // El overview se dibuja a la resolución real del panel para que las
@@ -1202,7 +1615,7 @@
     const key = `layer_${selectedLayer}`;
     const diff = diffHeatmapActive();
     const t = diff ? 1 : animT();
-    const n = META.neurons_per_layer;
+    const n = layerInfo(selectedLayer).units;
     const layerScale = layerScaleInput.checked && !diff;
     let max = diff ? comparison.maxAbs : scaleMax;
     if (layerScale) {
@@ -1524,9 +1937,17 @@
     const items = diff ? comparison.ranked : (topkData[key] || []);
     const pairs = diff ? items.map((item) => [item.neuron, item.delta]) : items;
     const max = pairs.length ? Math.max(...pairs.map((x) => Math.abs(x[1])), 1e-6) : 1;
+    const expert = diff
+      ? comparison.unit === 'expert'
+      : isMoeLayer(selectedLayer);
+    if (topkTitle) {
+      topkTitle.textContent = expert
+        ? 'Expertos con mayor peso'
+        : 'Neuronas con mayor activación';
+    }
     topkLayer.textContent = diff
       ? `capa ${selectedLayer} · Δ B − A`
-      : `capa ${selectedLayer} · valor con signo`;
+      : `capa ${selectedLayer} · ${expert ? 'peso del router' : 'valor con signo'}`;
     topkEl.innerHTML = pairs.map(([idx, v]) => {
       const width = Math.max(2, Math.round(Math.abs(v) / max * 100));
       const sel = idx === selectedNeuron ? ' sel' : '';
@@ -1557,20 +1978,23 @@
       selectedNeuron !== null && !running && !unavailableDiff && lastNormalRun
     );
     ablateBtn.disabled = !canAblate;
+    const unit = unitSingular();
+    ablateBtn.textContent = isMoeLayer() ? 'Apagar experto y regenerar' : 'Ablar y regenerar';
     if (selectedNeuron === null) {
-      ablateNote.textContent = 'Selecciona una neurona para probar una ablación.';
-      ablateBtn.title = 'Selecciona una neurona del mapa o del ranking';
+      ablateNote.textContent = `Selecciona un ${unit} para probar una ablación.`;
+      ablateBtn.title = `Selecciona un ${unit} del mapa o del ranking`;
     } else if (unavailableDiff) {
-      ablateNote.textContent = 'Sal del diff del heatmap para ablacionar una neurona real.';
+      ablateNote.textContent = `Sal del diff del heatmap para ablacionar un ${unit} real.`;
       ablateBtn.title = 'La ablación no está disponible sobre el diff';
     } else if (!lastNormalRun) {
       ablateNote.textContent = 'Genera una pasada normal antes de ablacionar.';
       ablateBtn.title = 'Necesitas una pasada normal de referencia';
     } else {
       ablateNote.textContent =
-        `Capa ${selectedLayer} · neurona ${selectedNeuron}. Repite el prompt y el muestreo de la pasada base.`;
-      ablateBtn.title =
-        `Apagar la neurona ${selectedNeuron} de la capa ${selectedLayer} y regenerar`;
+        `Capa ${selectedLayer} · ${unit} ${selectedNeuron}. Repite el prompt y el muestreo de la pasada base.`;
+      ablateBtn.title = isMoeLayer()
+        ? `Quitar el experto ${selectedNeuron} de la capa ${selectedLayer} y regenerar`
+        : `Apagar la neurona ${selectedNeuron} de la capa ${selectedLayer} y regenerar`;
     }
   }
 
@@ -1635,15 +2059,20 @@
     }
     const view = ablationView;
     const spec = view.spec;
+    const isExpert = isMoeLayer(spec.layer);
+    const unit = isExpert ? 'experto' : 'neurona';
+    const unitPhrase = isExpert ? 'el experto apagado' : 'la neurona apagada';
+    const afterTitle = document.getElementById('ablation-after-title');
+    if (afterTitle) afterTitle.textContent = isExpert ? 'Experto apagado' : 'Neurona apagada';
     ablationPanel.hidden = false;
-    ablationTitle.textContent = `Ablación · capa ${spec.layer} · neurona ${spec.neuron}`;
+    ablationTitle.textContent = `Ablación · capa ${spec.layer} · ${unit} ${spec.neuron}`;
     const beforeText = view.baseline.text || '';
     const afterText = view.result ? (view.result.text || '') : '';
     ablationBefore.textContent = beforeText || '(sin texto)';
     ablationBefore.classList.toggle('empty', !beforeText);
     ablationAfter.textContent = view.result
       ? (afterText || '(sin texto)')
-      : (view.error || 'Generando de nuevo con la neurona apagada…');
+      : (view.error || `Generando de nuevo con ${unitPhrase}…`);
     ablationAfter.classList.toggle('empty', !view.result && !view.error);
     ablationBeforeMeta.textContent = view.baseline.stopped === 'eos'
       ? 'EOS'
@@ -1665,7 +2094,7 @@
     } else if (!view.result) {
       ablationAfterMeta.textContent = 'generando…';
       ablationAfterMeta.className = 'ablation-tag';
-      tag = 'Misma prompt, modelo y parámetros; solo cambia la neurona apagada.' + sampleNote;
+      tag = `Misma prompt, modelo y parámetros; solo cambia ${isExpert ? 'el experto apagado' : 'la neurona apagada'}.` + sampleNote;
     } else {
       const same = view.result.text === view.baseline.text;
       ablationAfterMeta.textContent = same ? 'texto idéntico' : 'texto distinto';
@@ -1688,17 +2117,31 @@
     detailBody.hidden = false;
     const diff = diffHeatmapActive();
     const key = `layer_${selectedLayer}`;
+    const expert = diff
+      ? comparison.unit === 'expert'
+      : isMoeLayer(selectedLayer);
     const v = diff
       ? comparison.values[selectedNeuron]
       : ((curr[key] && curr[key][selectedNeuron]) || 0);
     dNeuron.textContent = selectedNeuron;
     dValue.textContent = v.toFixed(3);
-    dValueLabel.textContent = diff ? 'Δ B − A' : 'Valor actual';
+    dValueLabel.textContent = diff
+      ? 'Δ B − A'
+      : (expert ? 'Peso del router' : 'Valor actual');
+    if (dNeuronLabel) dNeuronLabel.textContent = expert ? 'Experto' : 'Neurona';
+    if (detailTitle) {
+      detailTitle.textContent = expert ? 'Experto seleccionado' : 'Neurona seleccionada';
+    }
+    document.getElementById('detail-empty').textContent = expert
+      ? 'Haz clic en un experto del mapa o en el ranking.'
+      : 'Haz clic en una neurona del mapa o en el ranking.';
     sparkNote.textContent = diff
       ? (comparison.mode === 'aligned'
         ? 'Diferencia por token coincidente (B − A).'
         : 'Diferencia por paso (B − A).')
-      : 'Su activación en los últimos tokens.';
+      : (expert
+        ? 'Su peso del router en los últimos tokens (0 = no elegido).'
+        : 'Su activación en los últimos tokens.');
     const items = diff ? comparison.ranked : (topkData[key] || []);
     const rank = items.findIndex((x) => (
       diff ? x.neuron === selectedNeuron : x[0] === selectedNeuron
@@ -1706,6 +2149,158 @@
     dRank.textContent =
       rank >= 0 ? `#${rank + 1} de la capa` : `fuera del Top-${META.top_k || 16}`;
     drawSpark();
+  }
+
+  /* =========================================================
+     Ruteo MoE: mapa de expertos y carga acumulada
+     ========================================================= */
+  function resetRouting() {
+    routingData = {};
+    routingLoad = {};
+    routingLoadSteps = 0;
+    renderRouting();
+    renderRoutingLoad();
+  }
+
+  function updateRouting(routing) {
+    if (!routing || !Object.keys(routing).length) return;
+    routingData = routing;
+    for (const [key, info] of Object.entries(routing)) {
+      const n = Number(info.n_experts) || 0;
+      if (!routingLoad[key] || routingLoad[key].length !== n) {
+        routingLoad[key] = new Array(n).fill(0);
+      }
+      for (const expert of info.experts || []) {
+        if (expert >= 0 && expert < n) routingLoad[key][expert] += 1;
+      }
+    }
+    routingLoadSteps += 1;
+    renderRouting();
+    renderRoutingLoad();
+  }
+
+  function renderMoeMetrics() {
+    if (!moeMetrics) return;
+    const active = META.active_params;
+    if (!modelIsMoe() || !active) {
+      moeMetrics.hidden = true;
+      return;
+    }
+    const fraction = Number.isFinite(active.active_fraction)
+      ? (active.active_fraction * 100).toFixed(1)
+      : '—';
+    moeMetrics.hidden = false;
+    moeMetrics.innerHTML =
+      `Parámetros <b>totales</b>: ${formatParams(active.total_params)} · ` +
+      `se computan por token: <b>${formatParams(active.active_params)}</b> ` +
+      `(<b>${fraction}%</b>). En un MoE la memoria no baja: todos los expertos ` +
+      `siguen cargados aunque no se usen.`;
+  }
+
+  function renderRouting() {
+    if (!moePanel || !moeGrid) return;
+    moePanel.hidden = !modelIsMoe();
+    renderMoeMetrics();
+    if (!modelIsMoe()) {
+      moeGrid.innerHTML = '';
+      return;
+    }
+    const n = Number(META.n_experts) || Number(META.neurons_per_layer) || 0;
+    const layers = Number(META.layers) || 0;
+    moeExpertsEl.textContent = n || '—';
+    moeKEl.textContent = META.router_top_k || '—';
+    if (!n || !layers) {
+      moeGrid.innerHTML = '';
+      return;
+    }
+    const cell = n > 48 ? 18 : (n > 32 ? 20 : 24);
+    moeGrid.style.setProperty('--moe-cell', `${cell}px`);
+    moeGrid.style.gridTemplateColumns = `auto repeat(${n}, ${cell}px)`;
+    const parts = ['<div class="moe-corner"></div>'];
+    for (let expert = 0; expert < n; expert++) {
+      parts.push(`<div class="moe-col-label">${expert}</div>`);
+    }
+    for (let layer = 0; layer < layers; layer++) {
+      const info = routingData[`layer_${layer}`];
+      const weights = new Map();
+      if (info) {
+        (info.experts || []).forEach((expert, index) => {
+          weights.set(expert, (info.weights || [])[index] ?? 0);
+        });
+      }
+      const max = Math.max(...weights.values(), 1e-6);
+      parts.push(`<div class="moe-layer-label">capa ${layer}</div>`);
+      for (let expert = 0; expert < n; expert++) {
+        const on = weights.has(expert);
+        const weight = on ? weights.get(expert) : 0;
+        const alpha = on ? 0.32 + 0.68 * (weight / max) : 0;
+        const title = on
+          ? `capa ${layer} · experto ${expert} · peso ${weight.toFixed(3)}`
+          : `capa ${layer} · experto ${expert} · no elegido`;
+        parts.push(
+          `<div class="moe-cell${on ? ' on' : ''}" style="--w:${alpha.toFixed(3)}" ` +
+          `data-layer="${layer}" data-expert="${expert}" title="${title}">${expert}</div>`
+        );
+      }
+    }
+    moeGrid.innerHTML = parts.join('');
+  }
+
+  function renderRoutingLoad() {
+    if (!moeLoad || !moeLoadHint) return;
+    if (!modelIsMoe()) {
+      moeLoad.innerHTML = '';
+      moeLoadHint.textContent = '';
+      return;
+    }
+    if (!routingLoadSteps) {
+      moeLoad.innerHTML =
+        '<p class="muted">Genera un texto para ver qué expertos eligió el router en cada capa.</p>';
+      moeLoadHint.textContent = 'carga acumulada durante la generación';
+      return;
+    }
+    const parts = [];
+    for (let layer = 0; layer < META.layers; layer++) {
+      const counts = routingLoad[`layer_${layer}`];
+      if (!counts) continue;
+      const total = counts.reduce((sum, value) => sum + value, 0);
+      if (!total) continue;
+      const segments = counts.map((count, expert) => {
+        if (!count) return '';
+        const pct = count / total * 100;
+        const hue = 185 + (expert * 37) % 150;
+        return `<i style="width:${pct.toFixed(3)}%;background:hsl(${hue} 80% 55%)" ` +
+          `title="experto ${expert}: ${pct.toFixed(1)}%"></i>`;
+      }).join('');
+      const ranked = counts
+        .map((count, expert) => ({ expert, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, Math.max(1, Number(META.router_top_k) || 3));
+      const chips = ranked.map(({ expert, count }) =>
+        `<span class="moe-load-chip"><b>${expert}</b> ${Math.round(count / total * 100)}%</span>`
+      ).join('');
+      parts.push(
+        `<div class="moe-load-row"><span class="moe-layer-label">capa ${layer}</span>` +
+        `<div class="moe-load-bar">${segments}</div>` +
+        `<div class="moe-load-chips">${chips}</div></div>`
+      );
+    }
+    moeLoad.innerHTML = parts.join('') ||
+      '<p class="muted">Todavía no hay ruteo para mostrar.</p>';
+    moeLoadHint.textContent =
+      `${routingLoadSteps} token${routingLoadSteps === 1 ? '' : 's'} · % de veces elegido`;
+  }
+
+  if (moeGrid) {
+    moeGrid.addEventListener('click', (event) => {
+      const cell = event.target.closest('.moe-cell');
+      if (!cell) return;
+      const layer = Number(cell.dataset.layer);
+      const expert = Number(cell.dataset.expert);
+      if (!Number.isInteger(layer) || !Number.isInteger(expert)) return;
+      if (layer !== selectedLayer) setLayer(layer);
+      selectNeuron(expert);
+    });
   }
 
   function drawSpark() {
@@ -1785,7 +2380,9 @@
     tooltip.style.left = `${e.clientX + 14}px`;
     tooltip.style.top = `${e.clientY + 14}px`;
     tooltip.textContent =
-      `capa ${selectedLayer} · neurona ${i} · ${diff ? 'Δ ' : ''}${v.toFixed(3)}`;
+      `capa ${selectedLayer} · ${diff
+        ? (comparison.unit === 'expert' ? 'experto' : 'neurona')
+        : unitSingular()} ${i} · ${diff ? 'Δ ' : ''}${v.toFixed(3)}`;
   });
   heatmapShapeEl.addEventListener('change', resizeHeatmap);
   heatmap.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
@@ -1870,35 +2467,65 @@
     const r = report;
     const parts = [];
 
+    const reportMoe = r.architecture === 'moe' || r.architecture === 'hybrid';
+    const reportUnit = r.unit === 'expert' || reportMoe ? 'experto' : 'neurona';
+    const reportUnits = reportUnit === 'experto' ? 'expertos' : 'neuronas';
     parts.push(
       `<p>El modelo <b>${escapeHtml(r.modelLabel || '—')}</b> recibió el prompt ` +
       `<b>«${escapeHtml(r.prompt)}»</b> y generó <b>${r.tokens}</b> tokens. ` +
       `Con KV cache, el prompt se procesa una vez; en cualquier caso, cada token nuevo atraviesa ` +
-      `las <b>${r.layers}</b> capas. Cada capa tiene <b>${r.neurons}</b> neuronas MLP.</p>`
+      `las <b>${r.layers}</b> capas. Cada capa tiene <b>${r.neurons}</b> ${reportUnits}` +
+      `${reportMoe ? ' MoE' : ' MLP'}.</p>`
     );
 
     if (r.captureAll) {
       parts.push(
         `<p class="report-note">Captura completa activada: al terminar puedes descargar la capa ` +
         `visible con <b>CSV capa</b> o las ${r.layers} capas en un único archivo con ` +
-        `<b>CSV todas</b> o <b>Parquet</b>.</p>`
+        `<b>CSV todas</b> o <b>Parquet</b>, y guardar esta pasada como A para compararla.</p>`
+      );
+    } else {
+      parts.push(
+        `<p class="report-note">Esta pasada no capturó todas las capas, así que <b>Guardar A</b> ` +
+        `está deshabilitado. Activa <b>Capturar todo · todas las capas</b> en los controles ` +
+        `antes de generar para poder comparar dos pasadas.</p>`
       );
     }
 
     if (r.ablation) {
+      const ablationPhrase = reportMoe
+        ? `el <b>experto ${r.ablation.neuron}</b>`
+        : `la <b>neurona ${r.ablation.neuron}</b>`;
       parts.push(
-        `<p class="report-note">Ablación activa: la <b>neurona ${r.ablation.neuron}</b> de la ` +
-        `<b>capa ${r.ablation.layer}</b> se forzó a <b>0</b> durante toda la generación. ` +
-        `Las activaciones mostradas ya incluyen ese cambio.</p>`
+        `<p class="report-note">Ablación activa: ${ablationPhrase} de la ` +
+        `<b>capa ${r.ablation.layer}</b> se ${reportMoe ? 'quitó del ruteo' : 'forzó a 0'} durante ` +
+        `toda la generación. Las activaciones mostradas ya incluyen ese cambio.</p>`
       );
     }
 
     parts.push(
       `<p><b>El proceso, en simple:</b> el prompt se parte en <b>tokens</b>; cada token se convierte ` +
       `en números y atraviesa las capas. En cada capa, la <b>atención</b> decide qué tokens anteriores ` +
-      `son relevantes y la <b>MLP</b> transforma la información con sus neuronas. Al final, el modelo ` +
-      `elige el siguiente token y repite el ciclo. Por eso el heatmap se actualiza con cada token generado.</p>`
+      `son relevantes y la <b>MLP</b> transforma la información con sus ${reportMoe ? 'expertos' : 'neuronas'}. ` +
+      `Al final, el modelo elige el siguiente token y repite el ciclo. Por eso el heatmap se actualiza ` +
+      `con cada token generado.</p>`
     );
+
+    if (reportMoe) {
+      const active = r.activeParams;
+      const fraction = active && Number.isFinite(active.active_fraction)
+        ? `${(active.active_fraction * 100).toFixed(1)}%`
+        : '—';
+      parts.push(
+        `<p><b>Ruteo MoE:</b> cada capa tiene <b>${r.nExperts || r.neurons}</b> expertos y el router ` +
+        `elige <b>top-${r.routerTopK || '—'}</b> por token. Los expertos no elegidos no se computan, ` +
+        `pero siguen ocupando memoria. Estimación de cómputo activo: ` +
+        `<b>${formatParams(active ? active.active_params : null)}</b> de ` +
+        `<b>${formatParams(active ? active.total_params : null)}</b> parámetros ` +
+        `(<b>${fraction}</b>). Mirá el panel «Ruteo MoE» para ver qué expertos se repiten y cuáles ` +
+        `quedan sin usar.</p>`
+      );
+    }
 
     if (r.maxAct.value > -Infinity) {
       const actAbs = Number.isFinite(r.maxAct.abs)
@@ -1907,7 +2534,7 @@
       const signedAct = `${r.maxAct.value > 0 ? '+' : ''}${r.maxAct.value.toFixed(3)}`;
       parts.push(
         `<p>La <b>activación de mayor valor absoluto</b> apareció en la ` +
-        `<b>capa ${r.maxAct.layer}</b>, <b>neurona #${r.maxAct.neuron}</b>: ` +
+        `<b>capa ${r.maxAct.layer}</b>, <b>${reportUnit} #${r.maxAct.neuron}</b>: ` +
         `valor con signo <b>${signedAct}</b> (magnitud <b>${actAbs.toFixed(3)}</b>), ` +
         `en el token <b>«${escapeHtml(r.maxAct.token)}»</b>. ` +
         `La capa con mayor <b>media de |activación|</b> (promedio de valores absolutos) fue la ` +
@@ -1976,7 +2603,7 @@
       `<div class="report-grid">` +
       `<div class="stat"><div class="k">Tokens generados</div><div class="v">${r.tokens} / ${r.requested || '—'}</div></div>` +
       `<div class="stat"><div class="k">Capa con mayor media |activación|</div><div class="v">capa ${r.maxLayerMean.layer} · media ${r.maxLayerMean.value > -Infinity ? r.maxLayerMean.value.toFixed(2) : '—'}</div></div>` +
-      `<div class="stat"><div class="k">Neurona de mayor |activación|</div><div class="v">${r.maxAct.value > -Infinity ? `capa ${r.maxAct.layer} · #${r.maxAct.neuron} · ${signedRecord}` : '—'}</div></div>` +
+      `<div class="stat"><div class="k">${reportUnit.charAt(0).toUpperCase() + reportUnit.slice(1)} de mayor |activación|</div><div class="v">${r.maxAct.value > -Infinity ? `capa ${r.maxAct.layer} · #${r.maxAct.neuron} · ${signedRecord}` : '—'}</div></div>` +
       `<div class="stat"><div class="k">Atención récord (top-8)</div><div class="v">${r.strongestAttn.weight > -Infinity ? `capa ${r.strongestAttn.layer} · c${r.strongestAttn.head} · ${(r.strongestAttn.weight * 100).toFixed(1)}%` : '—'}</div></div>` +
       `<div class="stat"><div class="k">Muestreo</div><div class="v">${escapeHtml(sampling)}</div></div>` +
       `<div class="stat"><div class="k">Tiempo de generación</div><div class="v">${elapsed}</div></div>` +
@@ -1988,7 +2615,10 @@
       `<div><b>Prompt</b>: el texto de entrada que le das al modelo.</div>` +
       `<div><b>Token</b>: pieza mínima de texto (palabra, trozo o signo).</div>` +
       `<div><b>Capa</b>: etapa de procesamiento; la información pasa por ellas en orden.</div>` +
-      `<div><b>Neurona MLP</b>: unidad que transforma la información dentro de una capa.</div>` +
+      (reportMoe
+        ? `<div><b>Experto</b>: red interna que la capa usa solo cuando el router lo elige.</div>` +
+          `<div><b>Router</b>: decide qué expertos participan en cada token y con qué peso.</div>`
+        : `<div><b>Neurona MLP</b>: unidad que transforma la información dentro de una capa.</div>`) +
       `<div><b>Activación</b>: número que indica cuánto se enciende una neurona (puede ser negativo).</div>` +
       `<div><b>Atención</b>: mecanismo que decide a qué tokens anteriores mirar.</div>` +
       `<div><b>Cabeza</b>: canal de atención independiente dentro de una capa.</div>` +
@@ -2031,7 +2661,7 @@
     const hasSteps = capturedSteps.length > 0 && !running;
     exportCsvBtn.disabled = !hasSteps;
     exportCsvBtn.title = hasSteps
-      ? `Descargar en CSV las neuronas de la capa visible (${selectedLayer}) durante toda la generación`
+      ? `Descargar en CSV ${unitPlural()} de la capa visible (${selectedLayer}) durante toda la generación`
       : 'Genera con «todas las capas» activado para descargar activaciones';
     const canAll = hasSteps && META.capture_all;
     const allRows = canAll
@@ -2388,7 +3018,7 @@
       const key = `layer_${layer}`;
       for (const item of capturedSteps) {
         const values = item.layers[key];
-        if (!values || values.length !== META.neurons_per_layer) {
+        if (!values || values.length !== layerInfo(layer).units) {
           throw new Error(`Falta la capa ${layer} en el paso ${item.step}.`);
         }
       }
@@ -2556,9 +3186,26 @@
       modelKey: report.modelKey || modelSelect.value,
       modelLabel: report.modelLabel || modelSelect.value,
       prompt: report.prompt,
+      text: streamEl.textContent || '',
       tokens: capturedSteps.length,
+      requested: report.requested,
+      stopped: report.stopped || '',
+      sampling: report.sampling ? { ...report.sampling } : null,
+      elapsed: report.elapsed,
       layers: report.layers || META.layers,
       neurons: report.neurons || META.neurons_per_layer,
+      architecture: report.architecture || META.architecture || 'dense',
+      unit: report.unit || META.unit || 'neuron',
+      nExperts: report.nExperts || META.n_experts,
+      routerTopK: report.routerTopK || META.router_top_k,
+      activeParams: report.activeParams || META.active_params || null,
+      layersMeta: (META.layers_meta || []).map((info) => ({ ...info })),
+      modulePath: META.module_path || '',
+      captureAll: Boolean(report.captureAll),
+      routingLoad: Object.fromEntries(
+        Object.entries(routingLoad).map(([key, counts]) => [key, counts.slice()])
+      ),
+      routingSteps: routingLoadSteps,
       ablation: report.ablation,
       seed: report.seed,
       steps: capturedSteps.slice(),
@@ -2631,8 +3278,142 @@
   function comparableSnapshots(a, b) {
     return Boolean(
       a && b && a.run !== b.run &&
-      a.modelKey === b.modelKey && a.layers === b.layers && a.neurons === b.neurons
+      a.modelKey === b.modelKey && a.layers === b.layers && a.neurons === b.neurons &&
+      (a.architecture || 'dense') === (b.architecture || 'dense')
     );
+  }
+
+  // ----- Comparación cross-model (métricas normalizadas) ------------------
+  function snapshotLayerInfo(snapshot, layer) {
+    const list = Array.isArray(snapshot.layersMeta) ? snapshot.layersMeta : [];
+    const info = list.find((entry) => entry.layer === layer);
+    if (info && Number.isFinite(info.units) && info.units > 0) {
+      return {
+        ...info,
+        unit: info.architecture === 'moe' ? 'expert' : (info.unit || 'neuron'),
+      };
+    }
+    const expert = snapshot.unit === 'expert' || snapshot.unit === 'mixed';
+    return {
+      layer,
+      architecture: expert ? 'moe' : (snapshot.architecture || 'dense'),
+      unit: expert ? 'expert' : 'neuron',
+      units: snapshot.neurons,
+    };
+  }
+
+  function snapshotIsMoe(snapshot) {
+    return Boolean(
+      snapshot && (snapshot.architecture === 'moe' || snapshot.architecture === 'hybrid')
+    );
+  }
+
+  function snapshotArchLabel(snapshot) {
+    if (!snapshot) return '—';
+    if (snapshot.architecture === 'moe') return 'MoE';
+    if (snapshot.architecture === 'hybrid') return 'híbrido';
+    return 'denso';
+  }
+
+  function snapshotUnitLabel(snapshot, plural = true) {
+    if (snapshot && snapshot.architecture === 'hybrid') return plural ? 'unidades' : 'unidad';
+    if (snapshotIsMoe(snapshot)) return plural ? 'expertos' : 'experto';
+    return plural ? 'neuronas' : 'neurona';
+  }
+
+  function snapshotUnitsLabel(snapshot) {
+    const layers = Number(snapshot.layers) || 0;
+    const units = [];
+    for (let layer = 0; layer < layers; layer++) {
+      const value = snapshotLayerInfo(snapshot, layer).units;
+      if (Number.isFinite(value)) units.push(value);
+    }
+    if (!units.length) return '—';
+    const min = Math.min(...units);
+    const max = Math.max(...units);
+    const unit = snapshotUnitLabel(snapshot);
+    return min === max ? `${min} ${unit}` : `${min}–${max} ${unit}`;
+  }
+
+  function snapshotRoutingStats(snapshot) {
+    if (!snapshotIsMoe(snapshot)) return [];
+    const layers = Number(snapshot.layers) || 0;
+    const load = snapshot.routingLoad || {};
+    const stats = [];
+    for (let layer = 0; layer < layers; layer++) {
+      const counts = load[`layer_${layer}`];
+      if (!Array.isArray(counts) || !counts.length) continue;
+      const total = counts.reduce((sum, value) => sum + value, 0);
+      if (!total) continue;
+      const n = counts.length;
+      const shares = counts.map((value) => value / total);
+      let entropy = 0;
+      for (const share of shares) if (share > 0) entropy -= share * Math.log2(share);
+      const normal = n > 1 ? entropy / Math.log2(n) : 0;
+      let topExpert = 0;
+      let topShare = 0;
+      shares.forEach((share, expert) => {
+        if (share > topShare) { topShare = share; topExpert = expert; }
+      });
+      const used = shares.filter((share) => share > 0).length;
+      stats.push({
+        layer, n, total, used, shares,
+        coverage: used / n,
+        entropy: normal,
+        topExpert,
+        topShare,
+      });
+    }
+    return stats;
+  }
+
+  function meanOf(values) {
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  function snapshotRoutingSummary(snapshot) {
+    const stats = snapshotRoutingStats(snapshot);
+    if (!stats.length) return null;
+    return {
+      layers: stats.length,
+      coverage: meanOf(stats.map((row) => row.coverage)),
+      entropy: meanOf(stats.map((row) => row.entropy)),
+      topShare: meanOf(stats.map((row) => row.topShare)),
+      picks: stats.reduce((sum, row) => sum + row.total, 0),
+      stats,
+    };
+  }
+
+  function percent(value) {
+    return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '—';
+  }
+
+  function snapshotRoutingBars(snapshot) {
+    const stats = snapshotRoutingStats(snapshot);
+    if (!stats.length) return '';
+    const rows = stats.map((row) => {
+      const segments = row.shares.map((share, expert) => {
+        if (!share) return '';
+        const hue = 185 + (expert * 37) % 150;
+        return `<i style="width:${(share * 100).toFixed(3)}%;` +
+          `background:hsl(${hue} 80% 55%)" title="experto ${expert}: ${percent(share)}"></i>`;
+      }).join('');
+      const chips = row.shares
+        .map((share, expert) => ({ share, expert }))
+        .sort((left, right) => right.share - left.share)
+        .slice(0, 3)
+        .filter(({ share }) => share > 0)
+        .map(({ share, expert }) =>
+          `<span class="moe-load-chip"><b>${expert}</b> ${percent(share)}</span>`
+        ).join('');
+      return `<div class="moe-load-row"><span class="moe-layer-label">capa ${row.layer}</span>` +
+        `<div class="moe-load-bar">${segments}</div>` +
+        `<div class="moe-load-chips">${chips}</div></div>`;
+    }).join('');
+    return `<div class="moe-load-block"><div class="panel-head">` +
+      `<h3>Carga de expertos</h3><span class="hint">${snapshot.routingSteps || 0} ` +
+      `token${snapshot.routingSteps === 1 ? '' : 's'} · % de veces elegido</span></div>${rows}</div>`;
   }
 
   function diffHeatmapActive() {
@@ -2643,6 +3424,7 @@
     const title = document.getElementById('heatmap-title');
     const isDiff = diffHeatmapActive();
     layerScaleInput.disabled = isDiff;
+    const info = layerInfo(selectedLayer);
     if (isDiff) {
       const mode = comparison.mode === 'mean'
         ? 'media de la generación'
@@ -2650,10 +3432,15 @@
           ? `paso ${comparison.step + 1}`
           : `token «${tokenText(comparison.aData.token)}»`);
       title.textContent = `Diferencia B − A · Capa ${selectedLayer} · ${mode}`;
-      heatmapHint.textContent = 'Δ = B − A por neurona';
+      heatmapHint.textContent =
+        `Δ = B − A por ${comparison.unit === 'expert' ? 'experto' : 'neurona'}`;
+    } else if (info.unit === 'expert') {
+      title.textContent =
+        `Mapa de expertos · Capa ${selectedLayer} (${info.units} expertos)`;
+      heatmapHint.textContent = 'cada celda = un experto · brillo = peso del router';
     } else {
       title.textContent =
-        `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
+        `Mapa de neuronas · Capa ${selectedLayer} (${info.units} neuronas)`;
       heatmapHint.textContent = 'cada celda = una neurona';
     }
   }
@@ -2736,22 +3523,40 @@
 
   function updateCompareControls() {
     const hasRun = capturedSteps.length > 0;
-    saveABtn.disabled = !hasRun;
+    saveABtn.disabled = !hasRun || running;
     saveABtn.title = hasRun
-      ? 'Guardar esta generación como A para compararla con una segunda pasada'
+      ? 'Guardar esta generación como A para compararla con otra pasada'
       : 'Genera con «todas las capas» activado para poder guardar A';
     const current = hasRun ? snapshotGeneration() : null;
-    const canCompare = Boolean(snapshotA && current && comparableSnapshots(snapshotA, current));
+    const canCompare = Boolean(
+      snapshotA && current && snapshotA.run !== current.run &&
+      snapshotA.steps.length && current.steps.length
+    );
     compareBtn.disabled = !canCompare;
-    compareBtn.title = canCompare
-      ? 'Comparar A con la generación actual para la capa visible'
-      : 'Necesitas guardar A y generar B con el mismo modelo y «todas las capas»';
+    compareBtn.title = !canCompare
+      ? 'Necesitas guardar A y generar B con «todas las capas»'
+      : (comparableSnapshots(snapshotA, current)
+        ? 'Comparar A con B: mismo modelo, diff por neurona o experto'
+        : 'Comparar A con B: arquitecturas o modelos distintos, con métricas normalizadas');
+    let hint = '';
+    if (running) {
+      hint = 'Generando… espera a que termine para guardar A.';
+    } else if (!hasRun) {
+      hint = 'Para guardar A: activa «todas las capas» en «Capturar todo» y pulsa Generar.';
+    } else if (!snapshotA) {
+      hint = 'Listo: pulsa «Guardar A» para fijar esta pasada.';
+    } else if (!canCompare) {
+      hint = 'A ya está guardada. Genera otra pasada (B) con «todas las capas» para comparar.';
+    }
+    compareHint.textContent = hint;
+    compareHint.hidden = !hint;
   }
 
   function clearComparison() {
     const wasDiff = compareHeatmap;
     comparison = null;
     compareSnapshots = null;
+    compareTab = 'compare';
     compareStep = 'mean';
     compareAlignments = [];
     compareHeatmap = false;
@@ -2759,6 +3564,7 @@
     compareControls.hidden = true;
     compareStepSelect.replaceChildren(new Option('Media de la generación', 'mean'));
     compareBody.innerHTML = '';
+    updateCompareTabButtons();
     updateCompareOverlayButton();
     updateHeatmapHeading();
     if (wasDiff) {
@@ -2809,13 +3615,222 @@
     if (!capturedSteps.length) return;
     clearComparison();
     snapshotA = snapshotGeneration();
+    compareSnapshots = { a: snapshotA, b: null };
+    compareTab = 'a';
+    renderComparePanel();
     saveABtn.textContent = 'A guardada ✓';
     updateCompareControls();
     setTimeout(() => { saveABtn.textContent = 'Guardar A'; }, 1400);
   }
 
+  function updateCompareTabButtons() {
+    const hasA = Boolean(compareSnapshots && compareSnapshots.a);
+    const hasB = Boolean(compareSnapshots && compareSnapshots.b);
+    for (const button of compareTabButtons) {
+      const tab = button.dataset.compareTab;
+      const enabled = tab === 'a' ? hasA : (tab === 'b' ? hasB : (hasA && hasB));
+      button.disabled = !enabled;
+      button.setAttribute('aria-selected', String(compareTab === tab && enabled));
+    }
+  }
+
+  function setCompareTab(tab) {
+    if (!compareSnapshots) return;
+    const hasA = Boolean(compareSnapshots.a);
+    const hasB = Boolean(compareSnapshots.b);
+    const allowed = tab === 'a' ? hasA : (tab === 'b' ? hasB : (hasA && hasB));
+    if (!allowed) return;
+    compareTab = tab;
+    if (tab !== 'compare') restoreHeatmapAfterDiff();
+    renderComparePanel();
+  }
+
+  if (compareTabButtons.length) {
+    for (const button of compareTabButtons) {
+      button.addEventListener('click', () => setCompareTab(button.dataset.compareTab));
+    }
+  }
+
   function formatSigned(value) {
     return `${value > 0 ? '+' : ''}${value.toFixed(3)}`;
+  }
+
+  function snapshotSamplingLine(snapshot) {
+    const s = snapshot.sampling;
+    if (!s) return '—';
+    const parts = [`modo=${s.mode ?? '—'}`];
+    if (s.mode !== 'greedy') {
+      parts.push(`temp=${s.temperature}`, `top-k=${s.top_k}`, `top-p=${s.top_p}`);
+    }
+    parts.push(`rep=${s.repetition_penalty}`, `n-gram=${s.no_repeat_ngram}`);
+    if (Number.isInteger(snapshot.seed)) parts.push(`semilla=${snapshot.seed}`);
+    return parts.join(' · ');
+  }
+
+  function snapshotActiveLine(snapshot) {
+    const active = snapshot.activeParams;
+    if (!active) return '—';
+    return `${formatParams(active.active_params)} de ${formatParams(active.total_params)} ` +
+      `(${percent(active.active_fraction)})`;
+  }
+
+  function renderSnapshotSummary(snapshot, label) {
+    if (!snapshot) {
+      return `<p class="muted">No hay una pasada ${label} guardada.</p>`;
+    }
+    const moe = snapshotIsMoe(snapshot);
+    const route = snapshotRoutingSummary(snapshot);
+    const active = snapshot.activeParams;
+    const stopped = snapshot.stopped === 'eos'
+      ? 'EOS'
+      : (snapshot.stopped === 'limit'
+        ? `límite de ${snapshot.requested || '—'}`
+        : (snapshot.stopped || '—'));
+    const ablation = snapshot.ablation
+      ? `capa ${snapshot.ablation.layer} · ` +
+        `${snapshotUnitLabel(snapshot, false)} ${snapshot.ablation.neuron}`
+      : 'no';
+    const parts = [];
+    parts.push(
+      `<div class="compare-snapshot-head">` +
+      `<span class="chip">${label}</span>` +
+      `<b>${escapeHtml(snapshot.modelLabel || snapshot.modelKey || '—')}</b>` +
+      `<span class="chip">${snapshotArchLabel(snapshot)}</span>` +
+      `<span class="hint">${escapeHtml(snapshotUnitsLabel(snapshot))} por capa</span>` +
+      `</div>`
+    );
+    parts.push(
+      `<p><b>Prompt</b>: «${escapeHtml(snapshot.prompt || '')}» · ` +
+      `<b>${snapshot.tokens}</b> tokens generados · <b>${snapshot.layers}</b> capas.</p>`
+    );
+    if (snapshot.text) {
+      parts.push(`<div class="compare-snapshot-text">${escapeHtml(snapshot.text)}</div>`);
+    }
+    parts.push(
+      `<div class="report-grid">` +
+      `<div class="stat"><div class="k">Tokens</div><div class="v">` +
+      `${snapshot.tokens} / ${snapshot.requested || '—'} · ${escapeHtml(stopped)}</div></div>` +
+      `<div class="stat"><div class="k">Parámetros totales</div><div class="v">` +
+      `${formatParams(active ? active.total_params : null)}</div></div>` +
+      `<div class="stat"><div class="k">Parámetros activos / token</div><div class="v">` +
+      `${formatParams(active ? active.active_params : null)} ` +
+      `(${percent(active ? active.active_fraction : null)})</div></div>` +
+      `<div class="stat"><div class="k">Ablación</div><div class="v">${escapeHtml(ablation)}</div></div>` +
+      `<div class="stat"><div class="k">Muestreo</div><div class="v">` +
+      `${escapeHtml(snapshotSamplingLine(snapshot))}</div></div>` +
+      `<div class="stat"><div class="k">${moe ? 'Top-k / expertos' : 'Unidad por capa'}</div>` +
+      `<div class="v">${moe
+        ? `${snapshot.routerTopK || '—'} / ${snapshot.nExperts || snapshot.neurons || '—'}`
+        : escapeHtml(snapshotUnitsLabel(snapshot))}</div></div>` +
+      `</div>`
+    );
+    if (moe && route) {
+      parts.push(
+        `<p class="report-note"><b>Ruteo</b>: ${percent(route.coverage)} de cobertura media, ` +
+        `entropía normalizada ${route.entropy.toFixed(2)} (0 = concentrado, 1 = repartido) y ` +
+        `${percent(route.topShare)} de peso medio para el experto más usado. ` +
+        `Se acumularon ${route.picks.toLocaleString('es')} elecciones de experto.</p>`
+      );
+      parts.push(snapshotRoutingBars(snapshot));
+    } else {
+      parts.push(
+        `<p class="report-note">Modelo denso: todas las neuronas de la MLP se computan en ` +
+        `cada token, así que no hay ruteo de expertos que mostrar.</p>`
+      );
+    }
+    return parts.join('');
+  }
+
+  function compareBarRow(label, aValue, bValue, formatter) {
+    if (!Number.isFinite(aValue) || !Number.isFinite(bValue)) return '';
+    const width = (value) => `${Math.max(0, Math.min(1, value)) * 100}%`;
+    return `<div class="compare-bar-row"><span class="bar-label">${escapeHtml(label)}</span>` +
+      `<div class="compare-bar a" title="A: ${formatter(aValue)}">` +
+      `<i style="width:${width(aValue)}"></i></div>` +
+      `<div class="compare-bar b" title="B: ${formatter(bValue)}">` +
+      `<i style="width:${width(bValue)}"></i></div></div>`;
+  }
+
+  function renderCrossComparison(a, b) {
+    comparison = null;
+    restoreHeatmapAfterDiff();
+    compareControls.hidden = true;
+    updateCompareOverlayButton();
+    updateHeatmapHeading();
+    const aRoute = snapshotRoutingSummary(a);
+    const bRoute = snapshotRoutingSummary(b);
+    const aActive = a.activeParams;
+    const bActive = b.activeParams;
+    const aFraction = aActive ? aActive.active_fraction : null;
+    const bFraction = bActive ? bActive.active_fraction : null;
+    const rows = [
+      ['Modelo', escapeHtml(a.modelLabel || a.modelKey), escapeHtml(b.modelLabel || b.modelKey)],
+      ['Arquitectura', snapshotArchLabel(a), snapshotArchLabel(b)],
+      ['Capas', a.layers, b.layers],
+      ['Unidades por capa', escapeHtml(snapshotUnitsLabel(a)), escapeHtml(snapshotUnitsLabel(b))],
+      ['Tokens generados', a.tokens, b.tokens],
+      ['Parámetros totales', formatParams(aActive ? aActive.total_params : null),
+        formatParams(bActive ? bActive.total_params : null)],
+      ['Parámetros activos / token', formatParams(aActive ? aActive.active_params : null),
+        formatParams(bActive ? bActive.active_params : null)],
+      ['Fracción activa', percent(aFraction), percent(bFraction)],
+      ['Top-k del router', a.routerTopK || '—', b.routerTopK || '—'],
+      ['Cobertura media de expertos', aRoute ? percent(aRoute.coverage) : '—',
+        bRoute ? percent(bRoute.coverage) : '—'],
+      ['Entropía media del ruteo', aRoute ? aRoute.entropy.toFixed(3) : '—',
+        bRoute ? bRoute.entropy.toFixed(3) : '—'],
+      ['Peso medio del experto más usado', aRoute ? percent(aRoute.topShare) : '—',
+        bRoute ? percent(bRoute.topShare) : '—'],
+    ];
+    const bodyRows = rows.map(([metric, left, right]) =>
+      `<tr><td>${metric}</td><td>${left}</td><td>${right}</td></tr>`
+    ).join('');
+    const bars = compareBarRow('Fracción activa', aFraction, bFraction, percent) +
+      compareBarRow(
+        'Entropía del ruteo',
+        aRoute ? aRoute.entropy : null,
+        bRoute ? bRoute.entropy : null,
+        (value) => value.toFixed(3)
+      );
+    const layerRows = [];
+    const maxLayers = Math.max(Number(a.layers) || 0, Number(b.layers) || 0);
+    for (let layer = 0; layer < maxLayers; layer++) {
+      const ar = aRoute && aRoute.stats.find((row) => row.layer === layer);
+      const br = bRoute && bRoute.stats.find((row) => row.layer === layer);
+      const aInfo = layer < a.layers ? snapshotLayerInfo(a, layer) : null;
+      const bInfo = layer < b.layers ? snapshotLayerInfo(b, layer) : null;
+      layerRows.push(
+        `<tr><td>Capa ${layer}</td>` +
+        `<td>${aInfo ? aInfo.units : '—'}</td>` +
+        `<td>${ar ? percent(ar.coverage) : '—'}</td>` +
+        `<td>${ar ? ar.entropy.toFixed(3) : '—'}</td>` +
+        `<td>${bInfo ? bInfo.units : '—'}</td>` +
+        `<td>${br ? percent(br.coverage) : '—'}</td>` +
+        `<td>${br ? br.entropy.toFixed(3) : '—'}</td></tr>`
+      );
+    }
+    compareBody.innerHTML =
+      `<p><b>A</b>: «${escapeHtml(a.prompt || '')}» · ${a.tokens} tokens · ` +
+      `${snapshotArchLabel(a)}. <b>B</b>: «${escapeHtml(b.prompt || '')}» · ` +
+      `${b.tokens} tokens · ${snapshotArchLabel(b)}.</p>` +
+      `<p class="report-note">Estas pasadas no son directamente comparables por índice de ` +
+      `neurona o experto. Se comparan <b>métricas normalizadas</b>: arquitectura, cómputo activo ` +
+      `y ruteo. Los valores de activación de un denso y un MoE no significan lo mismo.</p>` +
+      `<table class="compare-table"><thead><tr><th>Métrica</th><th>A</th><th>B</th></tr>` +
+      `</thead><tbody>${bodyRows}</tbody></table>` +
+      (bars ? `<div class="compare-bars">${bars}</div>` : '') +
+      (aRoute || bRoute
+        ? `<h3>Ruteo por capa</h3>` +
+          `<table class="compare-table"><thead><tr><th>Capa</th><th>A unidades</th>` +
+          `<th>A cobertura</th><th>A entropía</th><th>B unidades</th>` +
+          `<th>B cobertura</th><th>B entropía</th></tr></thead>` +
+          `<tbody>${layerRows.join('')}</tbody></table>`
+        : '') +
+      `<p class="report-note">«Cobertura» es la fracción de expertos que se usó al menos una vez. ` +
+      `La entropía va de 0 (siempre el mismo experto) a 1 (reparto uniforme). El diff por unidad ` +
+      `solo está disponible cuando A y B usan el mismo modelo.</p>`;
+    comparePanel.hidden = false;
+    updateCompareTabButtons();
   }
 
   function renderComparison() {
@@ -2825,14 +3840,17 @@
     const isMean = c.mode === 'mean';
     const isAligned = c.mode === 'aligned';
     const label = isMean ? 'Media' : 'Activación';
+    const isExpert = c.unit === 'expert';
+    const unit = isExpert ? 'experto' : 'neurona';
+    const unitPlural = isExpert ? 'expertos' : 'neuronas';
     const rows = c.top.map(({ neuron, a, b, delta }) => {
       const signClass = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : '');
       return `<tr><td>#${neuron}</td><td>${a.toFixed(3)}</td><td>${b.toFixed(3)}</td>` +
         `<td class="${signClass}">${formatSigned(delta)}</td></tr>`;
     }).join('');
     const context = isMean
-      ? `Diferencia de la <b>media de activación por neurona</b> en la <b>capa ${c.layer}</b>. ` +
-        `No se emparejan tokens entre pasadas: se compara el promedio de cada neurona a lo largo ` +
+      ? `Diferencia de la <b>media de activación por ${unit}</b> en la <b>capa ${c.layer}</b>. ` +
+        `No se emparejan tokens entre pasadas: se compara el promedio de cada ${unit} a lo largo ` +
         `de toda la generación. ` +
         (c.aData.count === c.bData.count
           ? `Se promedian ${c.aData.count} pasos en cada generación.`
@@ -2854,11 +3872,12 @@
       `<b>B</b>: «${escapeHtml(c.b.prompt)}» · ${c.b.tokens} tokens.</p>` +
       `<p>${context}</p>` +
       (max
-        ? `<p>El mayor cambio está en la <b>neurona #${max.neuron}</b>: ` +
+        ? `<p>El mayor cambio está en el <b>${unit} #${max.neuron}</b>: ` +
           `<b>${formatSigned(max.delta)}</b> (A ${max.a.toFixed(3)} → B ${max.b.toFixed(3)}).</p>`
         : '') +
-      `<table class="compare-table"><thead><tr><th>Neurona</th><th>${label} A</th>` +
-      `<th>${label} B</th><th>Δ (B − A)</th></tr></thead><tbody>${rows}</tbody></table>`;
+      `<table class="compare-table"><thead><tr><th>${unit.charAt(0).toUpperCase() + unit.slice(1)}</th>` +
+      `<th>${label} A</th><th>${label} B</th><th>Δ (B − A)</th></tr></thead>` +
+      `<tbody>${rows}</tbody></table>`;
 
     compareControls.hidden = false;
     comparePanel.hidden = false;
@@ -2872,20 +3891,47 @@
     }
   }
 
-  function showComparison(a, b) {
-    compareSnapshots = { a, b };
+  function renderComparePanel() {
+    if (!compareSnapshots) return;
+    const { a, b } = compareSnapshots;
     comparePanel.hidden = false;
-    if (!comparableSnapshots(a, b)) {
+    updateCompareTabButtons();
+    if (compareTab === 'a' || compareTab === 'b') {
+      comparison = null;
+      restoreHeatmapAfterDiff();
+      compareControls.hidden = true;
+      updateCompareOverlayButton();
+      updateHeatmapHeading();
+      compareBody.innerHTML = renderSnapshotSummary(
+        compareTab === 'a' ? a : b,
+        compareTab === 'a' ? 'A' : 'B'
+      );
+      return;
+    }
+    if (!a || !b) {
       comparison = null;
       restoreHeatmapAfterDiff();
       compareControls.hidden = true;
       updateCompareOverlayButton();
       updateHeatmapHeading();
       compareBody.innerHTML =
-        '<p class="report-note">Para comparar, ambas pasadas deben usar el mismo modelo y la misma ' +
-        'arquitectura, con «todas las capas» activado en las dos.</p>';
+        '<p class="report-note">Guarda A y genera B con «todas las capas» para compararlas.</p>';
       return;
     }
+    if (!comparableSnapshots(a, b)) {
+      renderCrossComparison(a, b);
+      return;
+    }
+    renderDirectComparison(a, b);
+  }
+
+  function showComparison(a, b) {
+    compareSnapshots = { a, b };
+    compareTab = 'compare';
+    renderComparePanel();
+  }
+
+  function renderDirectComparison(a, b) {
     let mode = null;
     let aStep = null;
     let bStep = null;
@@ -2948,6 +3994,7 @@
     diffs.sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
     comparison = {
       a, b, layer: selectedLayer,
+      unit: a.unit || 'neuron',
       mode,
       step: mode === 'step' ? aStep : null,
       aStep, bStep,
@@ -2975,11 +4022,13 @@
     for (const [key, values] of Object.entries(incoming)) curr[key] = values;
     topkData = data.top || {};
     if (data.attention) attnData = data.attention;
+    if (data.routing) updateRouting(data.routing);
     const text = data.delta ?? data.token ?? '';
     const tokenLabel = text.trim() ? text : '␣';
 
     const stepLayer = Number.isInteger(data.layer) ? data.layer : selectedLayer;
     selectedLayer = clamp(stepLayer, 0, META.layers - 1);
+    ensureLayoutForLayer();
     updateHeatmapHeading();
 
     if (META.capture_all) {
@@ -3193,14 +4242,13 @@
         if (data.neurons_per_layer) {
           selectedLayer = clamp(selectedLayer, 0, META.layers - 1);
           resizeHeatmap();
-          document.getElementById('heatmap-title').textContent =
-            `Mapa de neuronas · Capa ${selectedLayer} (${META.neurons_per_layer} neuronas)`;
         }
+        updateHeatmapHeading();
         prev = {};
         curr = {};
         topkData = {};
         selectedNeuron = null;
-        // En una ablación conservamos la neurona elegida para que el detalle
+        // En una ablación conservamos la unidad elegida para que el detalle
         // muestre su valor real (0) mientras se regenera.
         if (data.ablation && ablationView) {
           selectedLayer = data.ablation.layer;
@@ -3208,10 +4256,17 @@
         }
         spark = [];
         tokenCount = 0;
+        resetRouting();
         chipToken.textContent = 'token 0';
         chipModel.textContent = data.model_label;
+        chipArch.textContent = architectureLabel();
+        chipArch.title = META.architecture === 'moe'
+          ? `MoE: ${META.n_experts || '—'} expertos, top-${META.router_top_k || '—'} por token`
+          : 'Modelo denso: todas las neuronas de la capa se computan';
         chipLayers.textContent = `${META.layers} capas`;
-        chipNeurons.textContent = `${META.neurons_per_layer} neuronas/capa`;
+        chipNeurons.textContent = modelIsMoe()
+          ? `${META.n_experts || META.neurons_per_layer} expertos/capa`
+          : `${META.neurons_per_layer} neuronas/capa`;
         attnMeta = data.attention || { available: false, heads: 0, top_k: 8 };
         attnHead = 0;
         attnData = { tokens: [], layers: {} };
@@ -3221,14 +4276,25 @@
         report.modelKey = data.model || modelSelect.value;
         report.layers = META.layers;
         report.neurons = META.neurons_per_layer;
+        report.architecture = META.architecture || 'dense';
+        report.unit = META.unit || 'neuron';
+        report.nExperts = META.n_experts;
+        report.routerTopK = META.router_top_k;
+        report.activeParams = META.active_params;
         updateCompareControls();
         renderReport();
+        renderRouting();
+        renderRoutingLoad();
+        renderExplainer();
         streamEl.innerHTML = '';
         promptEcho.textContent = data.chat ? '' : data.prompt;
         lastErrorMessage = '';
         setBadge('ready', 'listo');
+        const unitCount = modelIsMoe()
+          ? `${META.n_experts || META.neurons_per_layer} expertos (top-${META.router_top_k || '—'})`
+          : `${META.neurons_per_layer} neuronas`;
         statusEl.textContent =
-          `Modelo listo · ${data.model_label} · ${META.layers} capas × ${META.neurons_per_layer} neuronas · generando…`;
+          `Modelo listo · ${data.model_label} · ${META.layers} capas × ${unitCount} · generando…`;
         renderTopk();
         updateDetail();
         needsDraw = true;
@@ -3348,6 +4414,7 @@
     promptEcho.textContent = '';
     streamEl.innerHTML = '';
     tokenCount = 0;
+    resetRouting();
     chipToken.textContent = 'token 0';
     attnData = { tokens: [], layers: {} };
     attnGeom = null;
@@ -3399,12 +4466,47 @@
     ablationView = null;
     renderAblation();
   });
+  function setIntent(next) {
+    const comparing = next === 'compare';
+    for (const card of intentCards) {
+      const active = card.dataset.intent === next;
+      card.classList.toggle('active', active);
+      const button = card.querySelector('button');
+      if (button) button.setAttribute('aria-pressed', String(active));
+    }
+    if (comparing) {
+      captureAllInput.checked = true;
+      if (running) {
+        intentStatus.innerHTML =
+          'La generación en curso no incluye este cambio: esperá a que termine y ' +
+          'volvé a generar con <b>todas las capas</b>.';
+      } else if (snapshotA) {
+        intentStatus.innerHTML =
+          'Listo: dejamos <b>todas las capas</b> activado. A ya está guardada; ' +
+          'generá B y pulsá <b>Comparar</b>.';
+      } else {
+        intentStatus.innerHTML =
+          'Listo: dejamos <b>todas las capas</b> activado. Generá A, pulsá ' +
+          '<b>Guardar A</b>, generá B y pulsá <b>Comparar</b>.';
+      }
+    } else {
+      if (!snapshotA) captureAllInput.checked = false;
+      intentStatus.innerHTML = snapshotA
+        ? 'A sigue guardada. Para compararla, volvé a <b>Preparar la comparación</b> y generá B.'
+        : 'Exploración simple: elegí un modelo, escribí un prompt y pulsá <b>Generar</b>. ' +
+          'No hace falta capturar todas las capas.';
+    }
+    intentStatus.hidden = false;
+  }
+
+  intentExploreBtn.addEventListener('click', () => setIntent('explore'));
+  intentCompareBtn.addEventListener('click', () => setIntent('compare'));
   saveABtn.addEventListener('click', saveSnapshotA);
   compareBtn.addEventListener('click', compareCurrent);
   compareExitBtn.addEventListener('click', clearComparison);
   compareStepSelect.addEventListener('change', () => {
     compareStep = compareStepSelect.value;
-    if (compareSnapshots) showComparison(compareSnapshots.a, compareSnapshots.b);
+    if (compareSnapshots) renderComparePanel();
   });
   compareOverlayBtn.addEventListener('click', () => {
     setDiffHeatmap(!compareHeatmap);
@@ -3430,8 +4532,8 @@
   const HELP = {
     model: {
       title: 'Modelo',
-      what: 'El modelo de lenguaje que va a escribir el texto y cuyas neuronas vas a observar.',
-      why: 'Cada modelo tiene distinto tamaño y entrenamiento: Qwen2.5-Instruct responde preguntas; GPT-2 y Pythia continúan el texto que escribas.',
+      what: 'El modelo de lenguaje que va a escribir el texto y cuyas neuronas —o expertos— vas a observar.',
+      why: 'Cada modelo tiene distinto tamaño y entrenamiento: Qwen2.5-Instruct responde preguntas; GPT-2 y Pythia continúan el texto; Mixtral 8xTiny es un MoE diminuto con pesos aleatorios para ver el ruteo.',
       tip: 'Solo hay uno cargado a la vez. La primera vez que elijas uno se descarga y puede tardar varios minutos.',
     },
     prompt: {
@@ -3502,12 +4604,12 @@
     },
     shape: {
       title: 'Forma del mapa',
-      what: 'El dibujo en que se reparten las neuronas de la capa: cuadrícula, cerebro o chip.',
-      why: 'Es solo estético. Las neuronas de una capa son una lista de números sin posición real, así que su lugar en el dibujo es arbitrario.',
+      what: 'El dibujo en que se reparten las neuronas o expertos de la capa: cuadrícula, cerebro o chip.',
+      why: 'Es solo estético. Las unidades de una capa son una lista de números sin posición real, así que su lugar en el dibujo es arbitrario.',
       tip: 'Que una zona del cerebro se encienda no significa que esa zona «haga» algo. Para analizar, la cuadrícula es lo más neutro.',
     },
     capture_all: {
-      title: 'Exportar · todas las capas',
+      title: 'Capturar todo · todas las capas',
       what: 'Guarda las activaciones de todas las capas del modelo, no solo la que estás viendo.',
       why: 'Es necesario para descargar CSV o Parquet de cualquier capa y para comparar dos pasadas (A vs B).',
       tip: 'Aumenta el tráfico y la memoria del navegador; actívalo solo si vas a exportar o comparar.',

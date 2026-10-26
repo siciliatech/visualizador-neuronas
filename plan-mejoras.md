@@ -1,9 +1,13 @@
 # Estado del plan de mejoras
 
 El plan original está completado para el uso previsto: una persona ejecuta el visualizador localmente,
-observa activaciones, compara pasadas y puede ablacionar una neurona. No hay trabajo obligatorio
-pendiente. La escala visual por capa se añadió como opción, conservando la escala global como valor
-predeterminado.
+observa activaciones, compara pasadas y puede ablacionar una neurona. Sobre esa base se añadió una
+**fase MoE** (ruteo de expertos y ablación de experto) sin cambiar el modo denso. La escala visual por
+capa se conserva como opción, con la escala global como valor predeterminado.
+
+Se añadió además el **comparador cross-model** (pestañas `A / B / Comparar` y métricas normalizadas
+de cómputo y ruteo), que funciona en CPU con `mixtral-tiny`. La fase **GPU** (OLMoE/Mixtral reales y un
+denso de 8B) queda como siguiente objetivo y no está implementada en esta entrega.
 
 ## Estado
 
@@ -12,7 +16,7 @@ predeterminado.
 | Fiabilidad del WebSocket | Hecho | Validación de mensajes, errores legibles, recuperación de la UI y decodificación incremental. |
 | Modelo y generaciones | Hecho | Carga protegida por lock; las generaciones se serializan para compartir un solo modelo sin mezclar estado. |
 | Rendimiento | Hecho | KV cache, reutilización del prefill, caché limitado a la última posición y payload reducido a la capa visible. |
-| Interfaz y atención | Hecho | Cambio de capa, atención top-8 explicada, canvas limitado a ~30 fps y soporte retina. |
+| Interfaz y atención | Hecho | Cambio de capa, atención top-8 explicada, canvas limitado a ~30 fps, soporte retina y un punto de partida con dos recorridos (explorar o comparar). |
 | Muestreo e informe | Hecho | Controles de muestreo completos e informe con semántica documentada. |
 | Comparación, ablación y exportación | Hecho | Comparación A/B, ablación de una neurona con semilla reproducible, CSV y Parquet. |
 | Empaquetado y documentación | Hecho | Docker CPU, dependencias fijadas y requisitos de memoria documentados. |
@@ -22,6 +26,9 @@ predeterminado.
 | Forma del mapa | Hecho | Selector cuadrícula / cerebro / chip; decorativo, la cuadrícula sigue por defecto. |
 | Ayuda contextual | Hecho | Iconos **?** con popover explicativo en cada control de muestreo y entrada. |
 | Escala visual por capa | Hecho | Opción para ajustar el contraste a la capa visible; la escala global sigue disponible. |
+| MoE (fase 1/2) | Hecho | Detección de arquitectura, unidad «experto», ruteo por capa, carga acumulada, parámetros activos y ablación de experto con `mixtral-tiny`. |
+| Comparador cross-model | Hecho | Pestañas `A / B / Comparar`; diff por unidad con el mismo modelo y métricas normalizadas (cómputo activo, cobertura y entropía del ruteo) entre modelos o arquitecturas distintas. |
+| GPU (fase 3) | Pendiente | `VISUALIZER_DEVICE`/`VISUALIZER_DTYPE`, guardia de VRAM, presets y prueba con OLMoE / Mixtral reales y un denso de 8B. |
 
 Los detalles de implementación y uso están en [NEXT_STEPS.md](./NEXT_STEPS.md) y [README.md](./README.md).
 
@@ -34,7 +41,9 @@ Estas capacidades no son requisitos para el uso local previsto y no forman parte
 - **Más tipos de intervención:** la ablación se limita a una neurona por generación. No se planifica
   ablación de grupos ni activation patching.
 - **Más datos de atención o contexto:** se mantiene el top-8 por cabeza y el límite de 512 tokens de entrada.
-- **Otras plataformas o infraestructura:** no se planifican migración a nnsight/NDIF ni variante Docker GPU.
+- **Otras plataformas o infraestructura:** no se planifica migración a nnsight/NDIF. La variante GPU
+  (diseño de dispositivo/dtype, guardia de VRAM y presets) queda para la fase siguiente, no para esta
+  entrega.
 - **Compresión de Parquet:** se mantiene el escritor actual sin compresión ni dependencias adicionales.
 - **Más pruebas de interfaz:** las pruebas UI adicionales para comparación, exportación, reconexión y
   cambio de capa no son necesarias para el alcance actual.
@@ -55,5 +64,8 @@ Estas capacidades no son requisitos para el uso local previsto y no forman parte
 - La prueba de navegador para la escala por capa está añadida en
   `tests/test_frontend_ablation.py`. En el entorno donde se incorporó, Playwright no estaba disponible,
   así que esa prueba se omitió; el comportamiento sí se comprobó manualmente en navegador.
-- No hay siguiente incremento planificado. Reabrir el plan solo si aparece una necesidad concreta de uso
-  que justifique ampliar este alcance.
+- El **comparador cross-model** está implementado en el cliente: con el mismo modelo ofrece el diff por
+  unidad y, si cambia el modelo o la arquitectura, pasa a métricas normalizadas. El siguiente incremento
+  planificado es la **fase GPU** (dispositivo/dtype, guardia de VRAM y presets) para probar OLMoE /
+  Mixtral reales y un denso de 8B. No se promete comparar índices de neurona con índices de experto: son
+  unidades distintas.

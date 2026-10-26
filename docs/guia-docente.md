@@ -1,7 +1,23 @@
 # Guía para docentes: el interior de una neurona artificial
 
-Cuatro actividades de 10–15 minutos para mostrar cómo «piensa» un modelo de lenguaje. No hace falta
-saber de IA: cada actividad trae lo que hay que decir, lo que hay que mirar y qué **no** concluir.
+Cinco actividades de 10–15 minutos para mostrar cómo «piensa» un modelo de lenguaje. No hace falta
+saber de IA: cada actividad trae lo que hay que decir, lo que hay que mirar y qué **no** concluir. La
+última actividad usa un modelo **MoE** para mostrar que no todas las partes del modelo trabajan en cada
+palabra.
+
+## Cómo empezar: dos recorridos
+
+Al abrir la app, la sección **¿Qué querés hacer?** propone dos caminos. Cada uno muestra un resumen y
+despliega sus pasos con **Ver más**:
+
+- **Ver un modelo trabajando:** exploración libre. Sirve para las actividades 1 a 4: elegir modelo,
+  escribir un prompt y mirar el heatmap, la atención y el informe.
+- **Comparar dos pasadas:** deja marcado **«todas las capas»** en «Capturar todo» y recuerda los pasos:
+  generar A, pulsar **Guardar A**, generar B y pulsar **Comparar**. Es el camino para la extensión de
+  la actividad 5 (denso vs MoE).
+
+La elección solo prepara la interfaz: no genera nada por sí sola. Para volver a la exploración simple,
+pulsá **Empezar a explorar** (con una A guardada, la conserva).
 
 ## Antes de la clase
 
@@ -29,6 +45,9 @@ saber de IA: cada actividad trae lo que hay que decir, lo que hay que mirar y qu
 | Neurona | Un «interruptor» que se enciende más o menos según lo que lee |
 | Cabeza de atención | Un ayudante que se fija en ciertas palabras del texto |
 | Ablación | Apagar una neurona a propósito para ver qué cambia |
+| Experto (MoE) | Un «especialista» que solo trabaja cuando el router lo elige |
+| Router | El «portero» que decide qué expertos participan en cada palabra |
+| Top-k (MoE) | Cuántos expertos se eligen por palabra; los demás no se computan |
 
 ## Actividad 1 · El modelo escribe palabra por palabra (10 min)
 
@@ -97,12 +116,49 @@ que no todas las neuronas pesan lo mismo.
 - Que si el texto no cambia, la ablación falló. Muchas neuronas son redundantes: que no cambie también
   enseña algo (pasa con las neuronas #693 de la capa 8, por ejemplo).
 
+## Actividad 5 · ¿Quién trabaja en cada palabra? Un modelo MoE (10 min)
+
+**Modelo:** `mixtral-tiny` (8 expertos por capa, elige 2 por token). **Prompt:** cualquiera corto, por
+ejemplo `La capital de Francia es`.
+
+> Aviso importante: este modelo es diminuto y tiene **pesos aleatorios**. No escribe texto coherente.
+> La actividad no trata sobre lo que dice, sino sobre **qué expertos elige** y cuántos quedan sin usar.
+
+1. Generá con **greedy** y unos 15 tokens.
+2. Bajá al panel **Ruteo MoE**. Señalá la grilla `capas × expertos`: cada fila es una capa y cada
+   columna un experto. Las celdas encendidas son los elegidos en el último token.
+3. Lean la frase del panel: «2 de 8 expertos por capa». Pregunten: **¿qué pasa con los otros 6?**
+   Respuesta: no se computan para esa palabra, aunque siguen ocupando memoria.
+4. Miren **«¿Siempre elige los mismos?»**: la barra acumulada muestra qué expertos se repiten y cuáles
+   casi nunca aparecen.
+5. Hagan clic en una celda de experto y luego en **Apagar experto y regenerar**. Compará el texto y el
+   ruteo: el experto desaparece de la decisión y el router puede elegir otro.
+
+**Pregunta:** si un experto no se usa nunca, ¿el modelo «lo desperdicia»? (No necesariamente: puede
+especializarse en otros tipos de texto, aunque con este modelo aleatorio no podremos comprobarlo.)
+
+**Extensión (5 min): comparar denso vs MoE.** Pulsá **Preparar la comparación**, generá una pasada A
+con GPT-2, pulsá **Guardar A**, cambiá a `mixtral-tiny`, generá B y pulsá **Comparar**. La pestaña
+**Comparar** no alinea neuronas con expertos: muestra métricas normalizadas (parámetros activos por
+token, top-k, cobertura y entropía del ruteo). Preguntá: **¿qué modelo usa menos cómputo por token y
+por qué no alcanza para decir que es «mejor»?**
+
+**No concluir:**
+- Que el experto 3 «sea» las mayúsculas o los verbos. Con pesos aleatorios no hay especialización real.
+- Que MoE ahorra memoria. Ahorra **cómputo**: todos los expertos siguen cargados.
+- Que el porcentaje de «parámetros activos» es tiempo de ejecución. Es una estimación por ruteo; en este
+  modelo diminuto da muy alto porque los expertos son una parte mínima del total.
+
 ## Qué no prometer
 
 - **Mostrar actividad no es explicar significado.** Vemos números que suben y bajan, no ideas.
 - **La forma cerebro/chip es decorativa.**
 - **Es un modelo chico** (0,5 mil millones de parámetros). Los modelos grandes son mucho más complejos.
 - **La ablación apaga una sola neurona**; no hay activation patching ni grupos de neuronas.
+- **El modelo MoE de la actividad 5 no está entrenado.** Sirve para ver el mecanismo, no para sacar
+  conclusiones sobre qué «sabe» un experto. Los MoE reales necesitan GPU y quedan fuera de esta guía.
+- **No se comparan índices de neurona con índices de experto.** Sí se pueden comparar métricas
+  normalizadas de cómputo y ruteo: son unidades distintas y la tabla cross-model lo aclara.
 
 ## Problemas frecuentes
 
@@ -112,6 +168,8 @@ que no todas las neuronas pesan lo mismo.
 | La primera generación tarda mucho | Se está descargando el modelo; hacelo antes de la clase |
 | La neurona que buscás no está en el ranking | El ranking muestra las 16 con mayor valor **en el último token**; usá las de la tabla, que se verificaron ahí |
 | No aparece «Ablar y regenerar» activo | Primero hay que generar una vez sin ablación y seleccionar una neurona |
+| Con `mixtral-tiny` el texto es incoherente | Es un MoE diminuto con pesos aleatorios; la actividad es sobre el ruteo, no sobre el texto |
+| No veo el panel «Ruteo MoE» | Solo aparece con modelos MoE; elegí `mixtral-tiny` en el desplegable |
 
 ## Siguiente paso
 
